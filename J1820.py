@@ -1,14 +1,19 @@
 # Lars Zwaan, 12414069
-# Extreme Astrophyics problem sets 1, 2, 3, 4
+# Dirk Kuiper, #
+# Extreme Astrophyics final project
+# plotting the spectrum of J1820, consising of self-absorbed synchrotron
+# and SSC (inverse Compton upscattering of local synchrotron photons) emission
 
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 import math
-from scipy.special import kn
 
-# a bunch of constants i'll need during the course, in CGS
+# leave out sys before handing in
+# used to exit before outputting rest of code, eg in testing
+from sys import exit
+
+# a bunch of constants needed during the course, in CGS
 c = 2.998 * 10**10
 b = 0.2898
 k_B = 1.4 * 10**(-16)
@@ -23,36 +28,8 @@ e = 5 * 10**(-10)
 MsgrA = 4.1 * 10**6 * M_sun
 DsgrA = 2.425 * 10**2
 
-
-# PS1 ex5: plot a planck function
-def planck_func(nu, T):
-    B_nu = ( (2*h*nu**3) / (c**2) ) / (math.exp((h*nu) / (k_B*T)) - 1)
-    return B_nu
-
-def plot_ex5():
-    # plot it for a couple of temperatures:
-    temps = [1, 1.5, 2, 2.725, 3]
-
-    for T in temps:
-
-        nu_list = [i for i in range(int(0.1 * 10**11), int(6 * 10**11), 10**9)]
-        B_list = [planck_func(nu, T) for nu in nu_list]
-
-        plt.plot(nu_list, B_list, label='{}K'.format(T))
-
-    T = 2.725
-    nu_max = T * wien_displacementlaw_freq_const
-    nu_max_y = [i for i in np.arange(min(B_list), max(B_list), ((max(B_list) - min(B_list)) / 1000))]
-    plt.plot([nu_max] * len(nu_max_y), nu_max_y, linestyle='dashed', color='red', label='expected peak for T=2.725K')
-    plt.xlabel("Frequency [$Hz$]")
-    plt.ylabel("Intensity [$erg$ $cm^{-2}$ $sr^{-1}$ $Hz^{-1}$]")
-    plt.title('CMB Planck spectrum')
-    plt.legend()
-    plt.show()
-
-    return
-
-# PS2 ex5: an expanding blob of plasma emitting
+# SECTION: SUPPORTING FUNCTIONS
+# these may or may not be used during the rest of the code
 
 # volume of a sphere for a radius
 def vol_sphere(R):
@@ -73,6 +50,12 @@ def L_edd(M):
 def blob_radius(R0, v, t):
     R = R0*(1+v*t)
     return R
+
+# calculate velocity from given Gamma factor
+def gamma_to_velo(gamma):
+    beta = (-(gamma**(-2) - 1))**2
+    v = beta**(1/2) * c
+    return v
 
 # extinction coefficient used to calculate source function (R&L 6.53)
 def extinction_coeff(q, m, const_C, B, pitch_angle, p, nu):
@@ -101,63 +84,42 @@ def intensity(q, m, const_C, B, pitch_angle, p, nu, R_t):
     I = source_func(q, m, const_C, B, pitch_angle, p, nu) * (1 - math.exp(-tau_nu))
     return I
 
-# define some numbers and calculate the asked values
-def setup():
-    velocity = 0.3*c
-    R0 = 10 * Rg(MsgrA)
-    gamma_max = 1000
-    m = m_e
-    pitch_angle = math.pi / 2
-    p = 2
+# SECTION: CONICAL JET
+# creating the setup that is needed for the conical jet
 
-    # frequencies and efficiencies are just picked numbers to make it look good
-    # nu has to be somewhere in radio (high) and eta around 10-8 to 10-3
-    nus = [10**10, 10**10.1, 10**10.2]
-    etas = [10**(-6)]
+# PROJECT DESCRIPTION:
+# (later maybe move this to top of code but easier here now)
 
-    for eta in etas:
-        for nu in nus:
-            
-            # times are just the frame in which u see the peak in I
-            times = [t for t in np.logspace(-10.5, -8, 1000)]
-            intensities = []
-
-            # see notes for the derivation of formulas
-            for t in times:
-
-                R_t = blob_radius(R0, velocity, t)
-
-                Ue = (eta * L_edd(MsgrA)) / (4*math.pi * R_t**2 * velocity)
-                Ub = Ue
-                const_C = Ue / math.log(gamma_max)
-                const_K = 2*vol_sphere(R_t)*Ub
-
-                B_t = ((3*const_K) / (R_t**3))**(1/2)
-
-                I = intensity(e, m, const_C, B_t, pitch_angle, p, nu, R_t) * 10**23
-                intensities.append(I)
-
-            plt.plot(times, intensities, label='nu = {} * 10e10 $Hz$'.format(round(nu / 10**10, 2)))
-
-    plt.ylabel("Intensity [$mJy$]")
-    plt.xscale("log")
-    plt.xlabel("Time [$sec$]")
-    plt.title('Expanding blob lightcurve')
-    plt.legend()
-    plt.show()
-
-    return
-
-# setup()
-
-# PS3 ex3: Conical jet
+# Assume a conical jet divided into ~10-20 slices (or more if your code runs fast)
+# Remember the jet is huge so divide into equal widths in log10(z) space!
+# Assume plasma moving with constant Lorentz factor (play with values from gamma~1 to ~4 to see what works best),
+# containing a power-law distribution of electrons in equipartition with the 
+# internal magnetic energy density to start, later you can also play with this
+# ratio (effectively changing the plasma beta).  For each slice of the jet calculate
+# self-absorbed synchrotron and SSC (inverse Compton upscattering of local
+# synchrotron photons) emission and add up into your final spectrum. The jet will
+# have low optical depth, typically there will be < few scatters depending on your
+# Compton Y, but play with different values to get best "match" to data.
+# If you want a challenge, vary the input power to study the range seen over
+# an outburst cycle (from very low tau to tau~1) , and make a plot of the resulting
+# radio/X-ray luminosity correlation.
 
 def conical_jet():
 
-    cone_size = [s for s in np.logspace(0, 20, 100)]
+    # "divided into ~10-20 slices"
+    # "divide huge jet in equal widths in log10(z) space"
+    number_slices = 20
+    cone_size = [s for s in np.logspace(0, 20, number_slices)]
     r0 = 10*Rg(MsgrA)
-    v = 0.3*c
-    Qj = 10**(40) # from naud (normalise thingie in question)
+
+    # "play with values gamma=1 to gamma=4"
+    # note: code doesnt run with gamma=1, so at least 1.01 or so
+    gamma = 2
+    v = gamma_to_velo(gamma)
+
+    # ANYTHING BELOW THIS IS FROM PROBLEM SET AND NEEDS TO BE ADJUSTED TO PROJECT
+
+    Qj = 10**(40) # from naud (normalise thingie in question PS4) 
     m = m_e
     pitch_angle = math.pi / 2
     p = 2
@@ -183,7 +145,9 @@ def conical_jet():
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
             intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
 
-            domega = 4*math.pi * (r-old_r) / DsgrA**2 # not sure about this tbh
+            # not sure about this tbh; has to do with emitting surface, but i think s should be involved then
+            domega = 4*math.pi * (r-old_r) / DsgrA**2
+
             flux = intensity_jet * domega 
             fluxes.append(flux)
         
@@ -209,36 +173,4 @@ def conical_jet():
 
     return
 
-# conical_jet()
-
-# PS3 ex4: Bremsstrahlung
-
-def bremsspectrum():
-    Z = 1
-
-    # pick something like the bohr radius for b
-    b = 10**(-11)
-    m = m_e
-    v = 0.09 * c
-    omegas = [o for o in np.logspace(3, 20, 1000)]
-    dW_domes = []
-
-    for omega in omegas:
-        dW_dome = (8 * Z**2 * e**6 * omega**2) / (3 * math.pi * c**3 * v**4 * m**2)
-        dW_dome *= (kn(1, b*omega / v))**2
-
-        dW_domes.append(dW_dome)
-
-    plt.plot(omegas, dW_domes)
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.xlabel(r"$\omega [Hz]$")
-    plt.ylabel(r"$\frac{dW}{d\omega} [erg^{-1} sec^{-1} Hz^{-1}]$")
-    plt.title("Bremsstrahlung revisited")
-    plt.show()
-
-# bremsspectrum()
-
-# git test
-
-# git test dirk
+conical_jet()
