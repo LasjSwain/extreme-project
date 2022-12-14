@@ -176,7 +176,7 @@ def draw_seed_photons(mc_parms,number=None):
     return(p_seed,x_seed)
 
 #
-# Write a function thar returns tau(P)
+# Write a function that returns tau(P)
 #
 
 def tau_of_scatter():
@@ -662,13 +662,22 @@ mc_parms={'n_photons':10000,            # start somewhat small and go up
           'tau':0.1,                    # tau ~ 0.1: Small-ish optical depth
           'kt_electron':3.2e-8,         # electron temperature: 20 keV
           'v_dist':f_of_v_maxwell,      # name of photon distribution function
-          'hnu_dist':f_of_hnu_planck,     # name of photon distribution function
+          'hnu_dist':f_of_hnu_planck,   # name of photon distribution function
          }
 
 # Let's make mc_parms consistent
 mc_parms['velocity']=np.sqrt(mc_parms['kt_electron']/(m_e)) # thermal speed
+print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
 
-hnu_scattered,hnu_seeds=plot_mc(mc_parms)
+# hnu_scattered,hnu_seeds=plot_mc(mc_parms)
+
+# NOTES ON WHAT TO CHANGE TO INTEGRATE
+# velocity in mc_parms has to be the same as velocity in the jet: v gamma_to_velo
+# in mc_parms, a tau is given as input, while in the jet, its calculated: make this consistent in some way
+# in mc_parms, H~R~100R_g -> in jet, 10r_g is used. make consistent
+# both n_photons and their input energy need to have some sort of value; idk what
+# electron temperature unclear to me. possibly use original IC value
+# for both velocity and frequency distribution, use synchrotron jet output (dirks idea)
 
 # START CONICAL JET PART (PS3)
 
@@ -682,8 +691,9 @@ def conical_jet():
 
     # "play with values gamma=1 to gamma=4"
     # note: code doesnt run with gamma=1, so at least 1.01 or so
-    gamma = 2
+    gamma = 1.11
     v = gamma_to_velo(gamma)
+    print("jet velocity for gamma={}: {:e}".format(gamma, v))
 
     # ANYTHING BELOW THIS IS FROM PROBLEM SET AND NEEDS TO BE ADJUSTED TO PROJECT
 
@@ -728,7 +738,6 @@ def conical_jet():
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0))
     plt.xlabel(r"$\nu [Hz]$")
     plt.ylabel("Intensity [$mJy$]")
-    # plt.legend()
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Total intensity vs frequency from different slices of a conical jet")
@@ -741,4 +750,4 @@ def conical_jet():
 
     return
 
-# conical_jet()
+conical_jet()
