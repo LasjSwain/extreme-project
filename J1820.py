@@ -1,5 +1,5 @@
 # Lars Zwaan, 12414069
-# Dirk Kuiper, #
+# Dirk Kuiper, 12416657
 # Extreme Astrophyics final project
 # plotting the spectrum of J1820, consising of self-absorbed synchrotron
 # and SSC (inverse Compton upscattering of local synchrotron photons) emission
@@ -480,10 +480,10 @@ def plot_mc(mc_parms,bins=None,xlims=None):
     
     # Now run simulation and normalize all outgoing photon energies 
     # so we can investigate energy gains and losses
-    # hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds'] 
+    hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds'] 
 
-    # testtttetetetest
-    hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))
+    # test
+    # hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))
     
     if (xlims is None):
         xlims=[hnu_scattered.min(),hnu_scattered.max()]    
@@ -566,7 +566,7 @@ def p_planck(hnu=None):
     """Numerical integration of cumulative planck PDF (to be inverted)
     
     Parameters:
-        hnu (numpy array): bins of photon energy e in untis of kT
+        hnu (numpy array): bins of photon energy e in units of kT
         
     Returns:
         numpy array: cumulative photon PDF as function of hnu
@@ -579,6 +579,10 @@ def p_planck(hnu=None):
     p=np.zeros(2*number)
     for i in range(1,2*number):
         p[i]=((quad(f_planck,0,hnu[i]))[0])
+    plt.plot(hnu, p)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.show()
     return (p,hnu)
 
 def hnu_of_p_planck(number=None,pdf=None,hnu=None):
@@ -590,7 +594,7 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
     Parameters:
         planck_pdf (numpy array): Previously calculated Planck PDF
         planck_hnu (numpy array): energy grid for PDF
-        number (interger): Number of photon energies to generate
+        number (integer): Number of photon energies to generate
         
     Returns:
         numpy array: energies corresponding to p
@@ -603,6 +607,7 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
         pdf,hnu=p_planck()
 
     e_phot=np.interp(np.random.rand(number),pdf,hnu)
+
     return(e_phot,pdf,hnu)
 
 #
@@ -610,7 +615,7 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
 #
 # Here is a new seed photon distribution to replace the one we used above.
 # All you have to do is compile this function and change
-# mc_parms['hnu_prob']=f_og_hnu_planck
+# mc_parms['hnu_prob']=f_of_hnu_planck
 #
 
 def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
@@ -634,11 +639,15 @@ def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     else:
         e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)        
     e*=mc_parms['kt_seeds']
+
+    print(e)
+    print(len(e))
+    exit()
     
     return(e)
 
 #
-# Looking good?
+# Looking good? nee man
 #
 # Now run an exaple Monte Carlo simulation with a Maxwellian electron
 # distribution.
@@ -658,6 +667,11 @@ mc_parms={'n_photons':10000,            # start somewhat small and go up
 mc_parms['velocity']=np.sqrt(mc_parms['kt_electron']/(m_e)) # thermal speed
 print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
 
+# test: try with same velocity as below, a higher one
+gamma = 10
+v = gamma_to_velo(gamma)
+mc_parms['velocity']=v
+
 hnu_scattered,hnu_seeds=plot_mc(mc_parms)
 
 # NOTES ON WHAT TO CHANGE TO INTEGRATE
@@ -666,7 +680,8 @@ hnu_scattered,hnu_seeds=plot_mc(mc_parms)
 # velocity in mc_parms has to be the same as velocity in the jet: v gamma_to_velo
 # in mc_parms, a tau is given as input, while in the jet, its calculated: make this consistent in some way
 # in mc_parms, H~R~100R_g -> in jet, 10r_g is used. make consistent
-# electron temperature unclear to me. possibly use original IC value
+# kt_electron: "At high energies, the spectrum displays a characteristic cutoff that indicates the electron temperature."
+# src: file:///C:/Users/lars1/Downloads/c9890edb-82da-4382-847e-d67b10a4a6eb.pdf
 # for frequency distribution, use synchrotron jet output (dirks idea)
 
 # START CONICAL JET PART (PS3)
@@ -711,23 +726,26 @@ def conical_jet():
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
-            intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
+            # intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
+            # do i need this 10**23 for mJy or not?
+            intensity_jet = source_func_jet * (1 - math.exp(-tau))
 
             # not sure about this tbh; has to do with emitting surface, but i think s should be involved then
             domega = 4*math.pi * (r-old_r) / DsgrA**2
 
-            flux = intensity_jet * domega 
+            flux = intensity_jet * domega
             fluxes.append(flux)
         
         old_r = r
 
         fluxes_list.append(fluxes)
 
-        plt.plot(nu_list, fluxes, label='r={}'.format(r))
+        plt.plot(nu_list, fluxes, label='r={:e}'.format(r))
 
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0))
     plt.xlabel(r"$\nu [Hz]$")
     plt.ylabel("Intensity [$mJy$]")
+    plt.legend()
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Total intensity vs frequency from different slices of a conical jet")
@@ -740,4 +758,4 @@ def conical_jet():
 
     return
 
-conical_jet()
+# conical_jet()
