@@ -764,6 +764,13 @@ def conical_jet():
             B = B0 * (r*cone_size_diff[slice_counter])**(-1)
             C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
 
+            # print("M_J1820:{:e}".format(M_J1820))
+            # print("Ue0:{:e}".format(Ue0))
+            # print("B0:{:e}".format(B0))
+            # print("B:{:e}".format(B))
+            # print("C:{:e}".format(C))
+            # exit()
+
             # power_jet units: erg cm^-3 s^-1 Hz^-1
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
             # extinction_coeff units: cm^-1
@@ -811,8 +818,16 @@ def conical_jet():
             
             number_photons_piece = avg_flux / (avg_energy_photon)
 
+            # this is a whack of bullshit to try to get to a reasonable number
+            # number_photons_piece *= (4*math.pi * D_J1820**2)
+            print("fluxes max:", max(fluxes))
+            max_number_photons = max(fluxes) / (h * nu_list[fluxes.index(max(fluxes))])
+            print("max number photons: {:e}".format(max_number_photons))
+            number_photons_piece *= 1000/max_number_photons
+
             # the number of photons in this piece of inputted synchrotron spectrum
-            print(number_photons_piece)
+            if slice_counter == 0:
+                print("number photons piece: {:e}".format(number_photons_piece))
 
             # as this is way too low for the monte carlo to run for,
             # i put in a normalisation factor, as only the scale
@@ -831,7 +846,6 @@ def conical_jet():
                 
             # number_photons_piece *= 1/(first_number_photons_piece * 10**3)
             # print("first number photons piece:", first_number_photons_piece)
-
             # number_photons_piece *= 10**9
 
             # FIX n_photons! use intensity?
@@ -847,53 +861,53 @@ def conical_jet():
                       'hnu_dist':f_of_hnu_mono,
                      }
 
-            hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
-            hnu_scattered *= avg_energy_photon / h
+            # 10 for number photons is a pretty random hard coded number
+            if slice_counter == 0 and number_photons_piece > 10:
+                hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
+                hnu_scattered *= avg_energy_photon / h
 
-            # for later use
-            # print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
+                for hnu in hnu_scattered:
+                    hnu_scattered_list.append(hnu)
 
-            for hnu in hnu_scattered:
-                hnu_scattered_list.append(hnu)
+                # for later use
+                # print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
 
-            # PLOT HIST AND INPUT SPEC FOR THIS SYNCHRO SPEC PIECE
-            # delete later down here until up here
-            # bins=None
-            # xlims=None
-            # if (xlims is None):
-            #     xlims=[hnu_scattered.min(),hnu_scattered.max()]    
-            # if (bins is None):
-            #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-            # else:
-            #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+                bins=None
+                xlims=None
+                if (xlims is None):
+                    xlims=[hnu_scattered.min(),hnu_scattered.max()]    
+                if (bins is None):
+                    bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+                else:
+                    bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-            # plt.hist(hnu_scattered,bins=bins,log=True,
-            #     label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-            # plt.xscale('log')
-            # plt.xlim(xlims[0],xlims[1])
-            # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-            # plt.ylabel(r'$N(h\nu)$',fontsize=20)
-            # plt.legend()
-            # plt.show()
-
-            # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
-            # plt.xscale("log")
-            # plt.yscale("log")
-            # plt.show()
+                plt.hist(hnu_scattered,bins=bins,log=True,
+                    label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+                plt.xscale('log')
+                plt.xlim(xlims[0],xlims[1])
+                plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+                plt.ylabel(r'$N(h\nu)$',fontsize=20)
+                plt.legend()
+                plt.title("IC hist for slice {} piece {}".format(slice_counter, n))
+                plt.show()
 
             # for pieces per spec plot
-            # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
+            if slice_counter == 0:
+                # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
+                continue
 
             # delete later up here until down here
 
             start = end
 
         # for pieces per spec plot
-        # plt.xscale("log")
-        # plt.yscale("log")
-        # plt.show()
+        if slice_counter == 0:
+            # plt.xscale("log")
+            # plt.yscale("log")
+            # plt.show()
+            continue
 
-        hnu_scattered_list = np.array(hnu_scattered_list)
+        # hnu_scattered_list = np.array(hnu_scattered_list)
 
         # PLS FIX LATER :(
         # bins=None
@@ -914,10 +928,7 @@ def conical_jet():
         # plt.legend()
         # plt.show()
     
-        plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
-
-        # only do one slice for starters
-        # exit()
+        # plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
         slice_counter += 1
         print("Slice {} made".format(slice_counter))
@@ -931,23 +942,23 @@ def conical_jet():
     plt.title("Total intensity vs frequency from different slices of a conical jet")
     plt.show()
 
-    bins=None
-    xlims=None
-    if (xlims is None):
-        xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
-    if (bins is None):
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-    else:
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+    # bins=None
+    # xlims=None
+    # if (xlims is None):
+    #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
+    # if (bins is None):
+    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+    # else:
+    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-    plt.hist(hnu_scattered_list,bins=bins,log=True,
-            label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-    plt.xscale('log')
-    plt.xlim(xlims[0],xlims[1])
-    plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-    plt.ylabel(r'$N(h\nu)$',fontsize=20)
-    plt.legend()
-    plt.show()
+    # plt.hist(hnu_scattered_list,bins=bins,log=True,
+    #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+    # plt.xscale('log')
+    # plt.xlim(xlims[0],xlims[1])
+    # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+    # plt.ylabel(r'$N(h\nu)$',fontsize=20)
+    # plt.legend()
+    # plt.show()
 
     return
 
