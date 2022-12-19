@@ -32,6 +32,15 @@ m_p = 1.67 * 10**(-24)
 e = 5 * 10**(-10)
 MsgrA = 4.1 * 10**6 * M_sun
 DsgrA = 2.425 * 10**2
+pc = 3.08567758 * 10**18
+
+# see https://arxiv.org/abs/2003.02360
+M_J1820 = 8.48 * M_sun
+
+# This distance implies that the source reached (15 ± 3) per cent of the 
+# Eddington luminosity at the peak of its outburst. 
+# https://www.researchgate.net/publication/338704321_A_radio_parallax_to_the_black_hole_X-ray_binary_MAXI_J1820070
+D_J1820 = 2.96 * 10**3 * pc
 
 # SECTION: SUPPORTING FUNCTIONS
 # these may or may not be used during the rest of the code
@@ -685,7 +694,7 @@ mc_parms={'n_photons':10000,            # start somewhat small and go up
 
 # Let's make mc_parms consistent
 mc_parms['velocity']=np.sqrt(mc_parms['kt_electron']/(m_e)) # thermal speed
-print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
+# print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
 
 # test: try with same velocity as below, a higher one
 gamma = 10
@@ -711,71 +720,87 @@ def conical_jet():
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
     number_slices = 10
-    cone_size = [s for s in np.logspace(0, 20, number_slices)]
-    r0 = 10*Rg(MsgrA)
+    cone_size = [s for s in np.logspace(0, 7, number_slices+1)]
+    cone_size_diff = np.diff(cone_size)
+    r0 = 10*Rg(M_J1820)
 
     # "play with values gamma=1 to gamma=4"
     # note: code doesnt run with gamma=1, so at least 1.01 or so (1.11 is thermal from notebook)
-    gamma = 4
+    gamma = 2
     v = gamma_to_velo(gamma)
-    print("jet velocity for gamma={}: {:e}".format(gamma, v))
+    print("jet velocity for gamma = {}: {:e}".format(gamma, v))
 
-    # ANYTHING BELOW THIS IS FROM PROBLEM SET AND NEEDS TO BE ADJUSTED TO PROJECT
-
-    Qj = 10**(40) # from naud (normalise thingie in question PS4) 
+    # adjust Qj to get same SSA peak as in data
+    Qj = 10**57
     m = m_e
     pitch_angle = math.pi / 2
     p = 2
-    gamma_max = 1000
+    gamma_max = 100
 
-    nu_list = [nu for nu in np.logspace(8, 19, 1000)]
+    nu_list = [nu for nu in np.logspace(9, 25, 1000)]
     fluxes_list = []
 
-    old_r = r0
+    slice_counter = 0
+    # these values were from the wrong (Sgr A*) normalisation, so useless now
+    # check later if needed or done in another way
+    # n_max_list = [25, 27, 29, 31.5, 33.5, 36, 38, 38, 39 ,38]
 
-    for s in cone_size:
+    for s in cone_size[:-1]:
         fluxes = []
         r = r0 + s * math.tan(5*math.pi/180)
+
+        # check later if needed or done in another way
+        # normalisation factor coming from eyeballing normalisation factor
+        # norm_power = n_max_list[slice_counter]
+
         for nu in nu_list:
             Ue0 = Qj / (math.pi * r0**2 * v)
             Ub0 = Ue0
             B0 = (8*math.pi * Ub0)**(1/2)
-            B = B0 * (r/r0)**(-1)
 
-            C = Ue0 * (r/r0)**-2 / math.log(gamma_max)
+            # new attempt using PS3sols:
+            # B = B0 * (r/r0)**(-1)
+            # C = Ue0 * (r/r0)**-2 / math.log(gamma_max)
+            B = B0 * (r*cone_size_diff[slice_counter])**(-1)
+            C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
+
+            # power_jet units: erg cm^-3 s^-1 Hz^-1
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
+            # extinction_coeff units: cm^-1
+            # source_func_jet units: erg cm^-2 s^-1 Hz^-1
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
+            # intensity_jet units: erg cm^-2 s^-1 Hz^-1 == Jy
             intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
-            # do i need this 10**23 for mJy or not?
-            # intensity_jet = source_func_jet * (1 - math.exp(-tau))
 
-            # not sure about this tbh; has to do with emitting surface, but i think s should be involved then
-            domega = 4*math.pi * (r-old_r) / DsgrA**2
+            # new attempt using PS3sols:
+            # domega = 4*math.pi * (r-old_r) / D_J1820**2
+            # flux = intensity_jet * domega
+            flux = intensity_jet * 4 * math.pi
 
-            flux = intensity_jet * domega
-            fluxes.append(flux)
-        
-        old_r = r
+            # correct for distance and emitting surface (cylinder)
+            flux_earth = flux * (2*math.pi*r*cone_size_diff[slice_counter]) / (4*math.pi * D_J1820**2)
+            fluxes.append(flux_earth)
 
         fluxes_list.append(fluxes)
 
         # find cutoff energy of slice
         cut_off_found = False
         for flux in fluxes:
-            # this number 10e-25 has been eyeballed of the plot
+            # this number 10e-30 has been eyeballed of the plot
             # fluxes[0] doesnt work for the lines/slices descending right away
-            # possibly could pick fluxes[0] for the first slice but hardcoding is ok here i guess
-            if flux < 10**(-25) and cut_off_found == False:
+            # so make sure when plotting that no slice descends right away
+            if flux < fluxes[0] and cut_off_found == False:
                 cut_off_found = True
                 cut_off_energy = nu_list[fluxes.index(flux)] * h
+
+        print("cutoff-frequency: {:e}".format(cut_off_energy / h))
 
         start = 0
         # if you plot the different 50 pieces, 50 looks (eyeball) like a
         # reasonable number: the pieces are small enough for an avg I & nu
         number_pieces = 50
         hnu_scattered_list = []
-        num_phot_list = []
         for n in range(1, number_pieces  + 1):
             end = n * len(fluxes) / number_pieces
 
@@ -786,29 +811,47 @@ def conical_jet():
             
             number_photons_piece = avg_flux / (avg_energy_photon)
 
-            # the number of photosn in this piece of inputted synchrotron spectrum
+            # the number of photons in this piece of inputted synchrotron spectrum
             print(number_photons_piece)
 
-            # as this is way too high for the monte carlo to run for,
-            # i divide it by a small normalisation factor, as only the scale
+            # as this is way too low for the monte carlo to run for,
+            # i put in a normalisation factor, as only the scale
             # is important now. we have to correct for this in some way later tho
-            number_photons_piece *= 1/10**21
+
+            # too small factor gives a huge array that monte carlo cant handle
+            # too big factor leads to the array becoming 0 and the code not working
+
+            # if n == 1:
+            #     first_number_photons_piece = number_photons_piece
+            #     if first_number_photons_piece > 10**24:
+            #         if first_number_photons_piece > 10**30:
+            #             first_number_photons_piece *= 10**(6)
+            #         else:
+            #             first_number_photons_piece *= 10**(3)
+                
+            # number_photons_piece *= 1/(first_number_photons_piece * 10**3)
+            # print("first number photons piece:", first_number_photons_piece)
+
+            # number_photons_piece *= 10**9
 
             # FIX n_photons! use intensity?
             mc_parms={'n_photons':int(number_photons_piece),
                       'kt_seeds':avg_energy_photon,
-                      # might be s ipv r, ask/check later
+                        # might be s ipv r, ask/check later
                       'H':r,
                       'velocity':v,
-                      # should use tau from calculations, but that one is tiny so doesnt give any scattering
+                        # should use tau from calculations, but that one is tiny so doesnt give any scattering
                       'tau':0.1,
                       'kt_electron':cut_off_energy,
                       'v_dist':f_of_v_mono,
                       'hnu_dist':f_of_hnu_mono,
                      }
 
-            hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
+            hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
             hnu_scattered *= avg_energy_photon / h
+
+            # for later use
+            # print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
 
             for hnu in hnu_scattered:
                 hnu_scattered_list.append(hnu)
@@ -824,7 +867,7 @@ def conical_jet():
             # else:
             #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-            # plt.hist(hnu_scattered_list,bins=bins,log=True,
+            # plt.hist(hnu_scattered,bins=bins,log=True,
             #     label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
             # plt.xscale('log')
             # plt.xlim(xlims[0],xlims[1])
@@ -837,10 +880,15 @@ def conical_jet():
             # plt.xscale("log")
             # plt.yscale("log")
             # plt.show()
+
+            # for pieces per spec plot
+            # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
+
             # delete later up here until down here
 
             start = end
 
+        # for pieces per spec plot
         # plt.xscale("log")
         # plt.yscale("log")
         # plt.show()
@@ -848,44 +896,58 @@ def conical_jet():
         hnu_scattered_list = np.array(hnu_scattered_list)
 
         # PLS FIX LATER :(
-        bins=None
-        xlims=None
-        if (xlims is None):
-            xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]    
-        if (bins is None):
-            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-        else:
-            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+        # bins=None
+        # xlims=None
+        # if (xlims is None):
+        #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]    
+        # if (bins is None):
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+        # else:
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-        # fig=plt.figure()
-
-        plt.hist(hnu_scattered_list,bins=bins,log=True,
-                label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-        plt.xscale('log')
-        plt.xlim(xlims[0],xlims[1])
-        plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-        plt.ylabel(r'$N(h\nu)$',fontsize=20)
-        plt.legend()
-        plt.show()
-        
-        # plt.plot(nu_list, fluxes, label='r={:e}'.format(r))
+        # plt.hist(hnu_scattered_list,bins=bins,log=True,
+        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+        # plt.xscale('log')
+        # plt.xlim(xlims[0],xlims[1])
+        # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+        # plt.ylabel(r'$N(h\nu)$',fontsize=20)
+        # plt.legend()
+        # plt.show()
+    
+        plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
         # only do one slice for starters
-        exit()
+        # exit()
+
+        slice_counter += 1
+        print("Slice {} made".format(slice_counter))
 
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0))
-    plt.xlabel(r"$\nu [Hz]$")
-    plt.ylabel("Intensity [$mJy$]")
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"Intensity\ [$Jy$] or [$erg\ cm^{-2}\ s^{-1}\ Hz^{-1}$]")
     plt.legend()
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Total intensity vs frequency from different slices of a conical jet")
     plt.show()
 
-    # now its not exactly flat; this is not a problem now
-    # due to a simplification; leon will go through 'geometrical factor' later in WC
+    bins=None
+    xlims=None
+    if (xlims is None):
+        xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
+    if (bins is None):
+        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+    else:
+        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-    # also go through units!! (idk how)
+    plt.hist(hnu_scattered_list,bins=bins,log=True,
+            label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+    plt.xscale('log')
+    plt.xlim(xlims[0],xlims[1])
+    plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+    plt.ylabel(r'$N(h\nu)$',fontsize=20)
+    plt.legend()
+    plt.show()
 
     return
 
