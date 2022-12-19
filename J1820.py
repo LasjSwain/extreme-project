@@ -493,6 +493,7 @@ def plot_mc(mc_parms,bins=None,xlims=None):
         bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
     fig=plt.figure()
+
     plt.hist(hnu_scattered,bins=bins,log=True,
              label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
     plt.xscale('log')
@@ -528,6 +529,18 @@ def f_of_v_maxwell(mc_parms):
         v=np.sqrt(mc_parms['kt_electron']/(m_e))*np.sqrt(np.sum((np.random.normal(0,1,3))**2))
     
     return(v)
+
+def f_of_v_mono(mc_parms):
+    """Returns a single randomly drawn velocity from distribution function
+    
+    Args:
+        mc_parms (dictionary): Monte-Carlo parameters
+
+    Returns:
+        real: electron velocity drawn from distribution
+    """
+    
+    return(mc_parms['velocity'])
 
 #
 # For comparison, let's define a Maxwellian
@@ -579,10 +592,6 @@ def p_planck(hnu=None):
     p=np.zeros(2*number)
     for i in range(1,2*number):
         p[i]=((quad(f_planck,0,hnu[i]))[0])
-    plt.plot(hnu, p)
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
     return (p,hnu)
 
 def hnu_of_p_planck(number=None,pdf=None,hnu=None):
@@ -616,7 +625,22 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
 # Here is a new seed photon distribution to replace the one we used above.
 # All you have to do is compile this function and change
 # mc_parms['hnu_prob']=f_of_hnu_planck
-#
+
+def f_of_hnu_mono(mc_parms,number=None):
+    """Returns randomly drawn velocity from distribution function
+    
+    Args:
+        mc_parms (dictionary): Monte-Carlo parameters
+    
+    Parameters:
+        number (integer): Number of photon energies to generate
+
+    Returns:
+        numpy array: seed photon energies drawn from photon distribution
+    """
+    if number is None:
+        number=1
+    return(np.ones(number)*mc_parms['kt_seeds'])
 
 def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     """Returns randomly drawn photon energy from a Planck distribution
@@ -639,10 +663,6 @@ def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     else:
         e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)        
     e*=mc_parms['kt_seeds']
-
-    print(e)
-    print(len(e))
-    exit()
     
     return(e)
 
@@ -659,7 +679,7 @@ mc_parms={'n_photons':10000,            # start somewhat small and go up
           'velocity':3e9,               # 10% speed of light--pretty hot
           'tau':0.1,                    # tau ~ 0.1: Small-ish optical depth
           'kt_electron':3.2e-8,         # electron temperature: 20 keV
-          'v_dist':f_of_v_maxwell,      # name of electron distribution function
+          'v_dist':f_of_v_mono,      # name of electron distribution function
           'hnu_dist':f_of_hnu_planck,   # name of photon distribution function
          }
 
@@ -670,9 +690,9 @@ print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
 # test: try with same velocity as below, a higher one
 gamma = 10
 v = gamma_to_velo(gamma)
-mc_parms['velocity']=v
+mc_parms['velocity'] = v
 
-hnu_scattered,hnu_seeds=plot_mc(mc_parms)
+# hnu_scattered,hnu_seeds=plot_mc(mc_parms)
 
 # NOTES ON WHAT TO CHANGE TO INTEGRATE
 # both n_photons needs to have some sort of value; idk what
@@ -690,13 +710,13 @@ def conical_jet():
 
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
-    number_slices = 20
+    number_slices = 10
     cone_size = [s for s in np.logspace(0, 20, number_slices)]
     r0 = 10*Rg(MsgrA)
 
     # "play with values gamma=1 to gamma=4"
-    # note: code doesnt run with gamma=1, so at least 1.01 or so
-    gamma = 1.11
+    # note: code doesnt run with gamma=1, so at least 1.01 or so (1.11 is thermal from notebook)
+    gamma = 4
     v = gamma_to_velo(gamma)
     print("jet velocity for gamma={}: {:e}".format(gamma, v))
 
@@ -726,9 +746,9 @@ def conical_jet():
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
-            # intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
+            intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
             # do i need this 10**23 for mJy or not?
-            intensity_jet = source_func_jet * (1 - math.exp(-tau))
+            # intensity_jet = source_func_jet * (1 - math.exp(-tau))
 
             # not sure about this tbh; has to do with emitting surface, but i think s should be involved then
             domega = 4*math.pi * (r-old_r) / DsgrA**2
@@ -740,7 +760,118 @@ def conical_jet():
 
         fluxes_list.append(fluxes)
 
-        plt.plot(nu_list, fluxes, label='r={:e}'.format(r))
+        # find cutoff energy of slice
+        cut_off_found = False
+        for flux in fluxes:
+            # this number 10e-25 has been eyeballed of the plot
+            # fluxes[0] doesnt work for the lines/slices descending right away
+            # possibly could pick fluxes[0] for the first slice but hardcoding is ok here i guess
+            if flux < 10**(-25) and cut_off_found == False:
+                cut_off_found = True
+                cut_off_energy = nu_list[fluxes.index(flux)] * h
+
+        start = 0
+        # if you plot the different 50 pieces, 50 looks (eyeball) like a
+        # reasonable number: the pieces are small enough for an avg I & nu
+        number_pieces = 50
+        hnu_scattered_list = []
+        num_phot_list = []
+        for n in range(1, number_pieces  + 1):
+            end = n * len(fluxes) / number_pieces
+
+            flux_piece = fluxes[int(start):int(end)]
+
+            avg_flux = 0.5 * (flux_piece[0] + flux_piece[-1])
+            avg_energy_photon = h * 0.5 * (nu_list[int(start)] + nu_list[int(end) - 1])
+            
+            number_photons_piece = avg_flux / (avg_energy_photon)
+
+            # the number of photosn in this piece of inputted synchrotron spectrum
+            print(number_photons_piece)
+
+            # as this is way too high for the monte carlo to run for,
+            # i divide it by a small normalisation factor, as only the scale
+            # is important now. we have to correct for this in some way later tho
+            number_photons_piece *= 1/10**21
+
+            # FIX n_photons! use intensity?
+            mc_parms={'n_photons':int(number_photons_piece),
+                      'kt_seeds':avg_energy_photon,
+                      # might be s ipv r, ask/check later
+                      'H':r,
+                      'velocity':v,
+                      # should use tau from calculations, but that one is tiny so doesnt give any scattering
+                      'tau':0.1,
+                      'kt_electron':cut_off_energy,
+                      'v_dist':f_of_v_mono,
+                      'hnu_dist':f_of_hnu_mono,
+                     }
+
+            hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
+            hnu_scattered *= avg_energy_photon / h
+
+            for hnu in hnu_scattered:
+                hnu_scattered_list.append(hnu)
+
+            # PLOT HIST AND INPUT SPEC FOR THIS SYNCHRO SPEC PIECE
+            # delete later down here until up here
+            # bins=None
+            # xlims=None
+            # if (xlims is None):
+            #     xlims=[hnu_scattered.min(),hnu_scattered.max()]    
+            # if (bins is None):
+            #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+            # else:
+            #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+            # plt.hist(hnu_scattered_list,bins=bins,log=True,
+            #     label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+            # plt.xscale('log')
+            # plt.xlim(xlims[0],xlims[1])
+            # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+            # plt.ylabel(r'$N(h\nu)$',fontsize=20)
+            # plt.legend()
+            # plt.show()
+
+            # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
+            # plt.xscale("log")
+            # plt.yscale("log")
+            # plt.show()
+            # delete later up here until down here
+
+            start = end
+
+        # plt.xscale("log")
+        # plt.yscale("log")
+        # plt.show()
+
+        hnu_scattered_list = np.array(hnu_scattered_list)
+
+        # PLS FIX LATER :(
+        bins=None
+        xlims=None
+        if (xlims is None):
+            xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]    
+        if (bins is None):
+            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+        else:
+            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+        # fig=plt.figure()
+
+        plt.hist(hnu_scattered_list,bins=bins,log=True,
+                label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+        plt.xscale('log')
+        plt.xlim(xlims[0],xlims[1])
+        plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+        plt.ylabel(r'$N(h\nu)$',fontsize=20)
+        plt.legend()
+        plt.show()
+        
+        # plt.plot(nu_list, fluxes, label='r={:e}'.format(r))
+
+        # only do one slice for starters
+        exit()
 
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0))
     plt.xlabel(r"$\nu [Hz]$")
@@ -758,4 +889,4 @@ def conical_jet():
 
     return
 
-# conical_jet()
+conical_jet()
