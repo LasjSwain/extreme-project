@@ -680,8 +680,6 @@ def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
     
     return(e)
 
-# hnu_scattered,hnu_seeds=plot_mc(mc_parms)
-
 # NOTES ON WHAT TO CHANGE TO INTEGRATE
 # both n_photons needs to have some sort of value; idk what
 # kt_seeds: use energy of photon at specific (h)nu
@@ -727,17 +725,10 @@ def conical_jet():
     number_photons_list = []
 
     slice_counter = 0
-    # these values were from the wrong (Sgr A*) normalisation, so useless now
-    # check later if needed or done in another way
-    # n_max_list = [25, 27, 29, 31.5, 33.5, 36, 38, 38, 39 ,38]
 
     for s in cone_size[:-1]:
         fluxes = []
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
-
-        # check later if needed or done in another way
-        # normalisation factor coming from eyeballing normalisation factor
-        # norm_power = n_max_list[slice_counter]
 
         for nu in nu_list:
             Ue0 = Qj / (math.pi * r0**2 * v)
@@ -747,18 +738,8 @@ def conical_jet():
             # Zdziarski et al 2022:
             # B0 = 10**4 G
 
-            # new attempt using PS3sols:
-            # B = B0 * (r/r0)**(-1)
-            # C = Ue0 * (r/r0)**-2 / math.log(gamma_max)
             B = B0 * (r*cone_size_diff[slice_counter])**(-1)
             C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
-
-            # print("M_J1820:{:e}".format(M_J1820))
-            # print("Ue0:{:e}".format(Ue0))
-            # print("B0:{:e}".format(B0))
-            # print("B:{:e}".format(B))
-            # print("C:{:e}".format(C))
-            # exit()
 
             # power_jet units: erg cm^-3 s^-1 Hz^-1
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
@@ -766,13 +747,11 @@ def conical_jet():
             # source_func_jet units: erg cm^-2 s^-1 Hz^-1
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
-            # intensity_jet units: erg cm^-2 s^-1 Hz^-1 == Jy
-            # intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**(23)
+            # intensity_jet units: erg cm^-2 s^-1 Hz^-1
+            # for [Jy], multiply by 10**23
+            # intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**23
             intensity_jet = source_func_jet * (1 - math.exp(-tau))
 
-            # new attempt using PS3sols:
-            # domega = 4*math.pi * (r-old_r) / D_J1820**2
-            # flux = intensity_jet * domega
             flux = intensity_jet * 4 * math.pi
 
             # we want the units to be in erg cm^-2 s^-1 for comparison to spectrum
@@ -846,8 +825,6 @@ def conical_jet():
         plt.ylabel(r'$N(h\nu)$',fontsize=20)
         plt.legend()
         plt.show()
-
-        exit()
 
         # keep track of which slice were at and let us know :)
         slice_counter += 1
@@ -928,24 +905,6 @@ def conical_jet():
     # plt.legend()
     # plt.show()
     # PART ABOVE IS NORMALISING FOR PHOTONS THAT I MIGHT NOT HAVE TO DO IF PDF/CDF WORKS
-
-    # bins=None
-    # xlims=None
-    # if (xlims is None):
-    #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
-    # if (bins is None):
-    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-    # else:
-    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-    # plt.hist(hnu_scattered_list,bins=bins,log=True,
-    #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-    # plt.xscale('log')
-    # plt.xlim(xlims[0],xlims[1])
-    # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-    # plt.ylabel(r'$N(h\nu)$',fontsize=20)
-    # plt.legend()
-    # plt.show()
 
     return
 
