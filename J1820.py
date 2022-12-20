@@ -4,6 +4,23 @@
 # plotting the spectrum of J1820, consising of self-absorbed synchrotron
 # and SSC (inverse Compton upscattering of local synchrotron photons) emission
 
+# PROJECT DESCRIPTION:
+# (later maybe move this to top of code but easier here now)
+
+# Assume a conical jet divided into ~10-20 slices (or more if your code runs fast)
+# Remember the jet is huge so divide into equal widths in log10(z) space!
+# Assume plasma moving with constant Lorentz factor (play with values from gamma~1 to ~4 to see what works best),
+# containing a power-law distribution of electrons in equipartition with the 
+# internal magnetic energy density to start, later you can also play with this
+# ratio (effectively changing the plasma beta).  For each slice of the jet calculate
+# self-absorbed synchrotron and SSC (inverse Compton upscattering of local
+# synchrotron photons) emission and add up into your final spectrum. The jet will
+# have low optical depth, typically there will be < few scatters depending on your
+# Compton Y, but play with different values to get best "match" to data.
+# If you want a challenge, vary the input power to study the range seen over
+# an outburst cycle (from very low tau to tau~1) , and make a plot of the resulting
+# radio/X-ray luminosity correlation.
+
 # imports used in original jet slices code
 import math
 import matplotlib.pyplot as plt
@@ -96,31 +113,7 @@ def intensity(q, m, const_C, B, pitch_angle, p, nu, R_t):
     I = source_func(q, m, const_C, B, pitch_angle, p, nu) * (1 - math.exp(-tau_nu))
     return I
 
-# SECTION: CONICAL JET
-# creating the setup that is needed for the conical jet
-
-# PROJECT DESCRIPTION:
-# (later maybe move this to top of code but easier here now)
-
-# Assume a conical jet divided into ~10-20 slices (or more if your code runs fast)
-# Remember the jet is huge so divide into equal widths in log10(z) space!
-# Assume plasma moving with constant Lorentz factor (play with values from gamma~1 to ~4 to see what works best),
-# containing a power-law distribution of electrons in equipartition with the 
-# internal magnetic energy density to start, later you can also play with this
-# ratio (effectively changing the plasma beta).  For each slice of the jet calculate
-# self-absorbed synchrotron and SSC (inverse Compton upscattering of local
-# synchrotron photons) emission and add up into your final spectrum. The jet will
-# have low optical depth, typically there will be < few scatters depending on your
-# Compton Y, but play with different values to get best "match" to data.
-# If you want a challenge, vary the input power to study the range seen over
-# an outburst cycle (from very low tau to tau~1) , and make a plot of the resulting
-# radio/X-ray luminosity correlation.
-
 # START IC PART (PS4)
-
-# note: parts unnecessary for the final N vs hv plot have been deleted
-# constant names have been made consistent
-# some comments from the original notebook have been deleted
 
 def compton_y(pre,post):
     return(np.mean((post-pre)/pre))
@@ -624,13 +617,6 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
 
     return(e_phot,pdf,hnu)
 
-#
-# Looks good?
-#
-# Here is a new seed photon distribution to replace the one we used above.
-# All you have to do is compile this function and change
-# mc_parms['hnu_prob']=f_of_hnu_planck
-
 def f_of_hnu_mono(mc_parms,number=None):
     """Returns randomly drawn velocity from distribution function
     
@@ -671,34 +657,28 @@ def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     
     return(e)
 
-def f_of_hnu_synchro():
-    return
+def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
 
-#
-# Looking good? nee man
-#
-# Now run an exaple Monte Carlo simulation with a Maxwellian electron
-# distribution.
-#
+    # does what f_of_hnu_planck does but then with synchro input instead of planck
+    # changes to this compared to planck:
+    # 1) got rid of if number is none (is it ever none?)
+    # 2) got rid of if pdf is none as i now define a pdf
 
-mc_parms={'n_photons':10000,            # start somewhat small and go up
-          'kt_seeds':1.6e-9,            # 1 keV input photons
-          'H':1e7,                      # say H ~ R, and R ~ 100 R_g ~ 3e7 cm
-          'velocity':3e9,               # 10% speed of light--pretty hot
-          'tau':0.1,                    # tau ~ 0.1: Small-ish optical depth
-          'kt_electron':3.2e-8,         # electron temperature: 20 keV
-          'v_dist':f_of_v_mono,      # name of electron distribution function
-          'hnu_dist':f_of_hnu_planck,   # name of photon distribution function
-         }
+    # its actually a cdf but being consistent with the original mistake
+    pdf = mc_parms['pdf']
 
-# Let's make mc_parms consistent
-mc_parms['velocity']=np.sqrt(mc_parms['kt_electron']/(m_e)) # thermal speed
-# print("thermal velocity: {:e}".format(np.sqrt(mc_parms['kt_electron']/(m_e))))
+    print(number)
+    print(pdf)
+    print(energies)
 
-# test: try with same velocity as below, a higher one
-gamma = 10
-v = gamma_to_velo(gamma)
-mc_parms['velocity'] = v
+    # SOMETHING GOES WRONG HERE, LOOK AT IT TOMORROW
+
+    e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)     
+
+    # is this additional step still needed?   
+    e*=mc_parms['kt_seeds']
+    
+    return(e)
 
 # hnu_scattered,hnu_seeds=plot_mc(mc_parms)
 
@@ -813,98 +793,63 @@ def conical_jet():
 
         print("cutoff-frequency: {:e}".format(cut_off_energy / h))
 
-        start = 0
-        # if you plot the different 50 pieces, 50 looks (eyeball) like a
-        # reasonable number: the pieces are small enough for an avg I & nu
-        number_pieces = 50
-        hnu_scattered_list = []
-        for n in range(1, number_pieces  + 1):
-            end = n * len(fluxes) / number_pieces
-
-            flux_piece = fluxes[int(start):int(end)]
-
-            avg_flux = 0.5 * (flux_piece[0] + flux_piece[-1])
-            avg_energy_photon = h * 0.5 * (nu_list[int(start)] + nu_list[int(end) - 1])
-            
-            number_photons_piece = avg_flux / (avg_energy_photon)
-
-            # this is a whack of bullshit to try to get to a reasonable number
-            # number_photons_piece *= (4*math.pi * D_J1820**2)
-            # print("fluxes max:", max(fluxes))
-            # max_number_photons = max(fluxes) / (h * nu_list[fluxes.index(max(fluxes))])
-            # print("max number photons: {:e}".format(max_number_photons))
-            # number_photons_piece *= 1000/max_number_photons
-
-            # FIX n_photons! use intensity?
-            mc_parms={'n_photons':int(number_photons_piece),
-                      'kt_seeds':avg_energy_photon,
-                        # might be s ipv r, ask/check later
-                      'H':r,
-                      'velocity':v,
-                        # should use tau from calculations, but that one is tiny so doesnt give any scattering
-                      'tau':0.1,
-                      'kt_electron':cut_off_energy,
-                      'v_dist':f_of_v_mono,
-                      'hnu_dist':f_of_hnu_planck,
-                     }
-
-            # 10 for number photons is a pretty random hard coded number
-            if slice_counter == -1 and number_photons_piece > 10:
-                hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
-                hnu_scattered *= avg_energy_photon / h
-
-                for hnu in hnu_scattered:
-                    hnu_scattered_list.append(hnu)
-
-                # for later use
-                # print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
-
-                # bins=None
-                # xlims=None
-                # if (xlims is None):
-                #     xlims=[hnu_scattered.min(),hnu_scattered.max()]    
-                # if (bins is None):
-                #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-                # else:
-                #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-                # plt.hist(hnu_scattered,bins=bins,log=True,
-                #     label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-                # plt.xscale('log')
-                # plt.xlim(xlims[0],xlims[1])
-                # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-                # plt.ylabel(r'$N(h\nu)$',fontsize=20)
-                # plt.legend()
-                # plt.title("IC hist for slice {} piece {}".format(slice_counter, n))
-                # plt.show()
-
-            start = end
-
-        # hnu_scattered_list = np.array(hnu_scattered_list)
-
-        # PLS FIX LATER :(
-        # bins=None
-        # xlims=None
-        # if (xlims is None):
-        #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]    
-        # if (bins is None):
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-        # else:
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-        # plt.hist(hnu_scattered_list,bins=bins,log=True,
-        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-        # plt.xscale('log')
-        # plt.xlim(xlims[0],xlims[1])
-        # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-        # plt.ylabel(r'$N(h\nu)$',fontsize=20)
-        # plt.legend()
-        # plt.show()
-
         # calculate number photons per nu per slice
         number_photons = [fluxes[i] / (h*nu_list[i]) for i in range(len(fluxes))]
         number_photons_list.append(number_photons)
 
+        # now, call for IC scattering with synchro as input
+        # for this, i need to make a pdf (probability density function)
+        # and then a cdf (cumulative density distribution)
+        # (see explanation on Jeff's piece of paper)
+
+        pdf = number_photons / integrate.simps(number_photons)
+        cdf = np.cumsum(pdf)
+
+        plt.plot(nu_list, cdf, label="CDF")
+        plt.legend()
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.show()
+
+        # FIX n_photons! use intensity?
+        # FIX kt_seeds
+        mc_parms={'n_photons': 1000,
+                    'kt_seeds': 1.6e-9,
+                    # might be s ipv r, ask/check later
+                    'H':r,
+                    'velocity':v,
+                    # should use tau from calculations, but that one is tiny so doesnt give any scattering
+                    'tau':0.1,
+                    'kt_electron':cut_off_energy,
+                    'v_dist':f_of_v_mono,
+                    'hnu_dist':f_of_hnu_synchro,
+                    # i know the nomenclature is off, but im being consitent with the original mistake
+                    'pdf': cdf,
+                    }
+    
+        hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
+
+        bins=None
+        xlims=None
+        if (xlims is None):
+            xlims=[hnu_scattered.min(),hnu_scattered.max()]
+        if (bins is None):
+            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+        else:
+            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+        plt.hist(hnu_scattered,bins=bins,log=True,
+                label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+        plt.xscale('log')
+        plt.xlim(xlims[0],xlims[1])
+        plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+        plt.ylabel(r'$N(h\nu)$',fontsize=20)
+        plt.legend()
+        plt.show()
+
+        exit()
+
+        # keep track of which slice were at and let us know :)
         slice_counter += 1
         print("Slice {} made".format(slice_counter))
 
@@ -923,8 +868,16 @@ def conical_jet():
     plt.show()
 
     # plot number of photons for each slice
-    # for number_photons in number_photons_list:
-    #     plt.scatter(nu_list, number_photons, label='r={:e}'.format(r), s=0.1)
+    for number_photons in number_photons_list:
+        plt.plot(nu_list, number_photons, label='r={:e}'.format(r), linestyle='dashed')
+
+    plt.plot(nu_list, np.sum(np.array(number_photons_list), 0))
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel("Number of photons")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.show()
 
     # PART BELOW IS NORMALISING FOR PHOTONS THAT I MIGHT NOT HAVE TO DO IF PDF/CDF WORKS
     # # make lists that will be filled with number of photons vs nu value when its enough photons
