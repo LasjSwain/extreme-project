@@ -30,8 +30,6 @@ G = 7 * 10**(-8)
 sigma_T = 7 * 10**(-25)
 m_p = 1.67 * 10**(-24)
 e = 5 * 10**(-10)
-MsgrA = 4.1 * 10**6 * M_sun
-DsgrA = 2.425 * 10**2
 pc = 3.08567758 * 10**18
 
 # see https://arxiv.org/abs/2003.02360
@@ -181,7 +179,14 @@ def draw_seed_photons(mc_parms,number=None):
     x_seed=photon_origin(number=number)
     n_seed=random_direction(number=number)
     hnu=mc_parms['hnu_dist'](mc_parms,number=number)
+    print(number)
+    print(hnu)
+    print(len(hnu))
     p_seed=(np.array([hnu,hnu*n_seed[:,0],hnu*n_seed[:,1],hnu*np.abs(n_seed[:,2])])).transpose()/c
+    print(p_seed)
+    print(len(p_seed))
+    exit()
+
     return(p_seed,x_seed)
 
 #
@@ -490,9 +495,6 @@ def plot_mc(mc_parms,bins=None,xlims=None):
     # Now run simulation and normalize all outgoing photon energies 
     # so we can investigate energy gains and losses
     hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds'] 
-
-    # test
-    # hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))
     
     if (xlims is None):
         xlims=[hnu_scattered.min(),hnu_scattered.max()]    
@@ -675,6 +677,9 @@ def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     
     return(e)
 
+def f_of_hnu_synchro():
+    return
+
 #
 # Looking good? nee man
 #
@@ -725,10 +730,16 @@ def conical_jet():
     r0 = 10*Rg(M_J1820)
 
     # "play with values gamma=1 to gamma=4"
-    # note: code doesnt run with gamma=1, so at least 1.01 or so (1.11 is thermal from notebook)
-    gamma = 2
+    # Zdziarski et al 2022:
+    gamma = 3
     v = gamma_to_velo(gamma)
     print("jet velocity for gamma = {}: {:e}".format(gamma, v))
+
+    # Zdziarski et al 2022:
+    jet_opening_angle = 1.5
+    incl_angle = 64 * math.pi/180
+
+    doppler_factor = 1/(gamma*(1-v*np.cos(incl_angle)/c))
 
     # adjust Qj to get same SSA peak as in data
     Qj = 10**57
@@ -747,7 +758,7 @@ def conical_jet():
 
     for s in cone_size[:-1]:
         fluxes = []
-        r = r0 + s * math.tan(5*math.pi/180)
+        r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
         # check later if needed or done in another way
         # normalisation factor coming from eyeballing normalisation factor
@@ -757,6 +768,9 @@ def conical_jet():
             Ue0 = Qj / (math.pi * r0**2 * v)
             Ub0 = Ue0
             B0 = (8*math.pi * Ub0)**(1/2)
+
+            # Zdziarski et al 2022:
+            # B0 = 10**4 G
 
             # new attempt using PS3sols:
             # B = B0 * (r/r0)**(-1)
@@ -786,7 +800,7 @@ def conical_jet():
             flux = intensity_jet * 4 * math.pi
 
             # correct for distance and emitting surface (cylinder)
-            flux_earth = flux * (2*math.pi*r*cone_size_diff[slice_counter]) / (4*math.pi * D_J1820**2)
+            flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
             fluxes.append(flux_earth)
 
         fluxes_list.append(fluxes)
@@ -797,6 +811,7 @@ def conical_jet():
             # this number 10e-30 has been eyeballed of the plot
             # fluxes[0] doesnt work for the lines/slices descending right away
             # so make sure when plotting that no slice descends right away
+            # and then use fluxes[0] anyways
             if flux < fluxes[0] and cut_off_found == False:
                 cut_off_found = True
                 cut_off_energy = nu_list[fluxes.index(flux)] * h
@@ -820,9 +835,9 @@ def conical_jet():
 
             # this is a whack of bullshit to try to get to a reasonable number
             # number_photons_piece *= (4*math.pi * D_J1820**2)
-            print("fluxes max:", max(fluxes))
+            # print("fluxes max:", max(fluxes))
             max_number_photons = max(fluxes) / (h * nu_list[fluxes.index(max(fluxes))])
-            print("max number photons: {:e}".format(max_number_photons))
+            # print("max number photons: {:e}".format(max_number_photons))
             number_photons_piece *= 1000/max_number_photons
 
             # the number of photons in this piece of inputted synchrotron spectrum
@@ -858,7 +873,7 @@ def conical_jet():
                       'tau':0.1,
                       'kt_electron':cut_off_energy,
                       'v_dist':f_of_v_mono,
-                      'hnu_dist':f_of_hnu_mono,
+                      'hnu_dist':f_of_hnu_planck,
                      }
 
             # 10 for number photons is a pretty random hard coded number
@@ -872,29 +887,29 @@ def conical_jet():
                 # for later use
                 # print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
 
-                bins=None
-                xlims=None
-                if (xlims is None):
-                    xlims=[hnu_scattered.min(),hnu_scattered.max()]    
-                if (bins is None):
-                    bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-                else:
-                    bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+                # bins=None
+                # xlims=None
+                # if (xlims is None):
+                #     xlims=[hnu_scattered.min(),hnu_scattered.max()]    
+                # if (bins is None):
+                #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+                # else:
+                #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-                plt.hist(hnu_scattered,bins=bins,log=True,
-                    label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-                plt.xscale('log')
-                plt.xlim(xlims[0],xlims[1])
-                plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-                plt.ylabel(r'$N(h\nu)$',fontsize=20)
-                plt.legend()
-                plt.title("IC hist for slice {} piece {}".format(slice_counter, n))
-                plt.show()
+                # plt.hist(hnu_scattered,bins=bins,log=True,
+                #     label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+                # plt.xscale('log')
+                # plt.xlim(xlims[0],xlims[1])
+                # plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
+                # plt.ylabel(r'$N(h\nu)$',fontsize=20)
+                # plt.legend()
+                # plt.title("IC hist for slice {} piece {}".format(slice_counter, n))
+                # plt.show()
 
             # for pieces per spec plot
             if slice_counter == 0:
                 # plt.plot(nu_list[int(start):int(end)], fluxes[int(start):int(end)])
-                continue
+                x = 0
 
             # delete later up here until down here
 
@@ -905,7 +920,7 @@ def conical_jet():
             # plt.xscale("log")
             # plt.yscale("log")
             # plt.show()
-            continue
+            x = 0
 
         # hnu_scattered_list = np.array(hnu_scattered_list)
 
@@ -928,7 +943,7 @@ def conical_jet():
         # plt.legend()
         # plt.show()
     
-        # plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
+        plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
         slice_counter += 1
         print("Slice {} made".format(slice_counter))
