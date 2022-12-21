@@ -463,48 +463,6 @@ def monte_carlo(mc_parms):
     # only return escaped photons and their seed energy
     return(hnu_scattered[hnu_scattered > 0],hnu_seed[hnu_scattered > 0])
 
-# CAN BE REMOVED PROBABLY
-def plot_mc(mc_parms,bins=None,xlims=None):
-    """Run an MC simulation and plot a histogram of the output
-    
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
-    
-    Paramters:
-        bins (numpy array): Optional spectral bins
-        xlims (2-element list, real): plot-limits
-    
-    Returns:
-        numpy array: The energies of all photons escaping the corona
-        numpy array: The seed-energies of the escaping photons
-    """
-    
-    
-    # Now run simulation and normalize all outgoing photon energies 
-    # so we can investigate energy gains and losses
-    hnu_scattered,hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds'] 
-    
-    if (xlims is None):
-        xlims=[hnu_scattered.min(),hnu_scattered.max()]    
-    if (bins is None):
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-    else:
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-    fig=plt.figure()
-
-    plt.hist(hnu_scattered,bins=bins,log=True,
-             label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-    plt.xscale('log')
-    plt.xlim(xlims[0],xlims[1])
-    plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-    plt.ylabel(r'$N(h\nu)$',fontsize=20)
-    plt.legend()
-    plt.show()
-    print('Fraction of escaping photons: {0:5.3e}\n'.format(hnu_scattered.size/mc_parms['n_photons']))
-    print('Compton y parameter: {0:5.3e}\n'.format(compton_y(hnu_seeds,hnu_scattered)))
-    return(hnu_scattered,hnu_seeds)
-
 #
 # Proper Maxwellian velocity distribution
 #
@@ -590,7 +548,7 @@ def p_planck(hnu=None):
 
     p=np.zeros(2*number)
     for i in range(1,2*number):
-        p[i]=((quad(f_planck,0,hnu[i]))[0])
+        p[i]=(quad(f_planck,0,hnu[i]))[0]
     return (p,hnu)
 
 def hnu_of_p_planck(number=None,pdf=None,hnu=None):
@@ -610,12 +568,28 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
         numpy array: hnu grid used to calculate PDF
     """
 
-    if number is None:
-        number=1
-    if (pdf is None):
-        pdf,hnu=p_planck()
+    # should both (number and pdf) always be given from f_of_hnu_synchro
+    # if number is None:
+    #     number=1
+    # if (pdf is None):
+    #     pdf,hnu=p_planck()
+
+    # eyeball_avg_hnu = 10**23.05
+    # closest_hnu = hnu[min(range(len(hnu)), key = lambda i: abs(hnu[i]-eyeball_avg_hnu))]
+    # print(sum(pdf[:hnu.index(closest_hnu)]))
+    # print(sum(pdf[hnu.index(closest_hnu):]))
+
+    # exit()
 
     e_phot=np.interp(np.random.rand(number),pdf,hnu)
+
+    # THIS SEEMS TO STILL GIVE WEIRD VALUES, but leave for now and maybe come back later
+    # ok come back now this is too weird
+    # plt.loglog(pdf, hnu)
+    # plt.show()
+
+    # print("avg ephot", sum(e_phot) / len(e_phot))
+    # exit()
 
     return(e_phot,pdf,hnu)
 
@@ -635,29 +609,29 @@ def f_of_hnu_mono(mc_parms,number=None):
         number=1
     return(np.ones(number)*mc_parms['kt_seeds'])
 
-def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
-    """Returns randomly drawn photon energy from a Planck distribution
+# def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
+#     """Returns randomly drawn photon energy from a Planck distribution
     
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
+#     Args:
+#         mc_parms (dictionary): Monte-Carlo parameters
 
-    Parameters:
-        pdf (numpy array): Previously calculated Planck PDF
-        hnu (numpy array): energy grid for PDF
+#     Parameters:
+#         pdf (numpy array): Previously calculated Planck PDF
+#         hnu (numpy array): energy grid for PDF
 
-    Returns:
-        numpy array: seed photon energies drawn from photon distribution
-    """
+#     Returns:
+#         numpy array: seed photon energies drawn from photon distribution
+#     """
     
-    if number is None:
-        number=1
-    if (pdf is None):
-        e,pdf,energies=hnu_of_p_planck(number=number)
-    else:
-        e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)        
-    e*=mc_parms['kt_seeds']
+#     if number is None:
+#         number=1
+#     if (pdf is None):
+#         e,pdf,energies=hnu_of_p_planck(number=number)
+#     else:
+#         e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)        
+#     e*=mc_parms['kt_seeds']
     
-    return(e)
+#     return(e)
 
 def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
 
@@ -699,7 +673,7 @@ def conical_jet():
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
     number_slices = 10
-    cone_size = [s for s in np.logspace(0, 6, number_slices+1)]
+    cone_size = [s for s in np.logspace(0, 3, number_slices+1)]
     cone_size_diff = np.diff(cone_size)
     r0 = 10*Rg(M_J1820)
 
@@ -727,37 +701,49 @@ def conical_jet():
 
     slice_counter = 0
     hnu_scattered_list = []
+    IC_fluxes = []
 
     for s in cone_size[:-1]:
         fluxes = []
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
+        # STUFF FROM PS3 SOLS:
+        # B_initial = 10**7
+        # phi_B = B_initial*r0*cone_size[:-1][0]
+        # B = phi_B / (r*cone_size_diff[slice_counter])
+        # Ub = B**2/(8*np.pi)
+        # Ue = Ub
+        # C = Ue/np.log(gamma_max)
+
+        # OWN OLD STUFF:
+        Ue0 = Qj / (math.pi * r0**2 * v)
+        Ub0 = Ue0
+        B0 = (8*math.pi * Ub0)**(1/2)
+        # Zdziarski et al 2022:
+        # B0 = 10**4 G
+        B = B0 * (r*cone_size_diff[slice_counter])**(-1)
+        C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
+
         for nu in nu_list:
-            Ue0 = Qj / (math.pi * r0**2 * v)
-            Ub0 = Ue0
-            B0 = (8*math.pi * Ub0)**(1/2)
-
-            # Zdziarski et al 2022:
-            # B0 = 10**4 G
-
-            B = B0 * (r*cone_size_diff[slice_counter])**(-1)
-            C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
 
             # power_jet units: erg cm^-3 s^-1 Hz^-1
             power_jet = (10**(-22) * C * B / (p+1)) * (10**(-7) * nu / B)**(-(p-1)/2)
+
             # extinction_coeff units: cm^-1
             # source_func_jet units: erg cm^-2 s^-1 Hz^-1
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
+
             # intensity_jet units: erg cm^-2 s^-1 Hz^-1
-            # for [Jy], multiply by 10**23
-            # intensity_jet = source_func_jet * (1 - math.exp(-tau)) * 10**23
+            # for [Jy], multiply intensity_jet by 10**23
             intensity_jet = source_func_jet * (1 - math.exp(-tau))
 
             flux = intensity_jet * 4 * math.pi
 
-            # we want the units to be in erg cm^-2 s^-1 for comparison to spectrum
-            flux *= nu
+            # we want the units to be in erg cm^-2 s^-1 for comparison
+            # to spectrum in paper, so technically this is then nuFnu
+            # flux *= nu
+            # THIS SHOULD BE DONE WAY LATER IN CODE TO PREVENT FUCKING WITH NUMBER PHOTONS
 
             # correct for distance and emitting surface (cylinder)
             flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
@@ -784,17 +770,17 @@ def conical_jet():
         # total number of photons for the slice, to normalize:
         number_photons_total_slice = integrate.simps(number_photons)
         pdf = number_photons / number_photons_total_slice
-        cdf = np.cumsum(pdf)
-
-        print(number_photons_total_slice)
+        pdf = np.cumsum(pdf)
 
         # we need to input a number of photons and scale this per slice
         # the first slice has the most photons: normalize that to norm_goal_photons
         # by dividing each slice by norm_factor_photons and multiplying by norm_goal_photons
         if slice_counter == 0:
-            norm_fac = 10000 / number_photons_total_slice
+            norm_fac = 1000 / number_photons_total_slice
         n_photons = norm_fac * number_photons_total_slice
         n_photons = int(n_photons)
+
+        # print(n_photons)
 
         # FIX kt_seeds (was 1.6e-9 in example) (has very little effect)
         mc_parms={'n_photons': n_photons,
@@ -808,21 +794,58 @@ def conical_jet():
                     'v_dist':f_of_v_mono,
                     'hnu_dist':f_of_hnu_synchro,
                     # i know the nomenclature is off, but im being consitent with the original mistake
-                    'pdf': cdf,
+                    'pdf': pdf,
                     'nu_list':nu_list,
                     }
     
         # do the monte carlo for each slice (not sure exactly how it works yet)
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
 
+        # convert this histogram type thing to a number_photons vs frequency
+        N_list = [0 for nu in nu_list]
+        for nu in hnu_scattered:
+            # find closest value in nu_list
+            # https://www.geeksforgeeks.org/python-find-closest-number-to-k-in-given-list/
+            closest_nu = nu_list[min(range(len(nu_list)), key = lambda i: abs(nu_list[i]-nu))]
+            N_list[nu_list.index(closest_nu)] += 1
+
         # to get back to a flux, multiply by energy hnu and remove normalisation
-        hnu_scattered = [N/norm_fac * h*nu for N in hnu_scattered for nu in nu_list]
+        # as the main plot is nuFnu, multiply by another factor of nu (**2)
+        for i in range(len(N_list)):
+            # N_list[i] = N_list[i]/norm_fac * h*nu_list[i]
+            N_list[i] = N_list[i]/norm_fac * h*nu_list[i]**2
+
+        # plt.loglog(nu_list, N_list)
+        # plt.show()
+        # exit()
+
+        IC_fluxes.append(N_list)
+
+        # bins=None
+        # xlims=None
+        # if (xlims is None):
+        #     xlims=[hnu_scattered.min(),hnu_scattered.max()]
+        # if (bins is None):
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+        # else:
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+        # plt.hist(hnu_scattered,bins=bins,log=True,
+        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+        # plt.xscale('log')
+        # plt.xlim(xlims[0],xlims[1])
+        # plt.xlabel(r'$\nu$')
+        # plt.ylabel(r'$N$')
+        # plt.legend()
+        # plt.show()
+
+        # exit()
 
         hnu_scattered_list.append(hnu_scattered)
 
         # keep track of which slice were at and let us know :)
         slice_counter += 1
-        # print("Slice {} made".format(slice_counter))
+        print("Slice {} made".format(slice_counter))
     
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
@@ -847,20 +870,27 @@ def conical_jet():
     plt.legend()
     plt.show()
 
-    exit()
+    # exit()
 
     # plot nuFnu for each slice
     for fluxes in fluxes_list:
         plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
+    for IC_flux in IC_fluxes:
+        plt.scatter(nu_list, IC_flux)
+
     # plot total nuFnu per nu
-    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0))
+    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
+    plt.scatter(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
+
     plt.xlabel(r"$\nu\ [Hz]$")
     plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}]$")
     plt.legend()
     plt.xscale("log")
     plt.yscale("log")
     plt.show()
+
+    # exit()
 
     # plot number of photons for each slice
     for number_photons in number_photons_list:
@@ -873,56 +903,6 @@ def conical_jet():
     plt.yscale("log")
     plt.legend()
     plt.show()
-
-    # PART BELOW IS NORMALISING FOR PHOTONS THAT I MIGHT NOT HAVE TO DO IF PDF/CDF WORKS
-    # # make lists that will be filled with number of photons vs nu value when its enough photons
-    # # if its not 'enough' (less than treshold of max_num_phot), they wont contribute anyways
-    # treshold = 0.01
-    # number_photons_treshold = []
-    # nu_list_treshold = []
-
-    # # find max number of photons in general
-    # max_num_phot = 0
-    # for number_photons in number_photons_list:
-    #     new_max_num_phot = max(number_photons)
-    #     if new_max_num_phot > max_num_phot:
-    #         max_num_phot = new_max_num_phot
-        
-    # # fill the list with number photons and nu values above treshold
-    # for number_photons in number_photons_list:
-    #     for i in range(len(number_photons) - 1):
-    #         num_phot = number_photons[i]
-
-    #         # only append number_photons and nu if theyre above treshold
-    #         if num_phot > treshold * max_num_phot:
-    #             number_photons_treshold.append(num_phot)
-    #             nu_list_treshold.append(nu_list[i])
-
-    # # sum the components of each slice to get a total distribution
-    # sum_number_photons_treshold = []
-    # sum_nu_list_treshold = []
-    # for i in range(len(number_photons_treshold)):
-    #     if nu_list_treshold.count(nu_list_treshold[i]) > 1:
-    #         indices = [j for j, x in enumerate(nu_list_treshold) if x == nu_list_treshold[i]]
-    #         sum = 0
-    #         for index in range(len(indices)):
-    #             sum += number_photons_treshold[indices[index]]
-    #         sum_number_photons_treshold.append(sum)
-    #         sum_nu_list_treshold.append(nu_list_treshold[i])
-    #     else:
-    #         sum_number_photons_treshold.append(number_photons_treshold[i])
-    #         sum_nu_list_treshold.append(nu_list_treshold[i])
-
-    # # plot number photons per nu for total and per slice
-    # plt.scatter(nu_list_treshold, number_photons_treshold, s=1, c='red', label='per slice')
-    # plt.scatter(sum_nu_list_treshold, sum_number_photons_treshold, s=1, c='blue', label='total')
-    # plt.xlabel(r"$\nu\ [Hz]$")
-    # plt.ylabel("Number of photons")
-    # plt.xscale("log")
-    # plt.yscale("log")
-    # plt.legend()
-    # plt.show()
-    # PART ABOVE IS NORMALISING FOR PHOTONS THAT I MIGHT NOT HAVE TO DO IF PDF/CDF WORKS
 
     return
 
