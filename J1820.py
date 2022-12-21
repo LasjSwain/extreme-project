@@ -463,9 +463,34 @@ def monte_carlo(mc_parms):
     # only return escaped photons and their seed energy
     return(hnu_scattered[hnu_scattered > 0],hnu_seed[hnu_scattered > 0])
 
-#
-# Proper Maxwellian velocity distribution
-#
+
+# a powerlaw distribution
+p=1.65
+gamma_min=1
+gamma_max=10**6
+
+def powerlaw(gamma):
+    return gamma**-p
+
+# normalize to get PDF wqith surface of 1
+norm,error = quad(powerlaw, gamma_min, gamma_max)
+
+def powerlaw_PDF(gamma):
+    return(powerlaw(gamma)/norm)
+
+
+def f_of_v_powerlaw(mc_parms):
+
+    number = 1000
+    N = np.zeros(number)
+    gamma = np.logspace(0,6,number)
+
+    for i in range(number):
+        N[i] = quad(powerlaw_PDF, 1, gamma[i])[0]
+
+    gamma_to_transform = np.interp(np.random.rand(1), N, gamma)
+    print('get me out pls')
+    return gamma_to_velo(gamma_to_transform)
 
 def f_of_v_maxwell(mc_parms):
     """Returns a single randomly drawn velocity from distribution function
@@ -692,8 +717,9 @@ def conical_jet():
     Qj = 10**58
     m = m_e
     pitch_angle = math.pi / 2
-    p = 2
-    gamma_max = 100
+    p = 1.66
+    gamma_max = 10**6
+    gamma_min = 1
 
     nu_list = [nu for nu in np.logspace(11.5, 26, 1000)]
     fluxes_list = []
@@ -791,7 +817,7 @@ def conical_jet():
                     # should use tau from calculations, but that one is tiny so doesnt give any scattering
                     'tau':0.1,
                     'kt_electron':cut_off_energy,
-                    'v_dist':f_of_v_mono,
+                    'v_dist':f_of_v_powerlaw,
                     'hnu_dist':f_of_hnu_synchro,
                     # i know the nomenclature is off, but im being consitent with the original mistake
                     'pdf': pdf,
