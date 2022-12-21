@@ -463,6 +463,7 @@ def monte_carlo(mc_parms):
     # only return escaped photons and their seed energy
     return(hnu_scattered[hnu_scattered > 0],hnu_seed[hnu_scattered > 0])
 
+# CAN BE REMOVED PROBABLY
 def plot_mc(mc_parms,bins=None,xlims=None):
     """Run an MC simulation and plot a histogram of the output
     
@@ -608,6 +609,7 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
         numpy array: cumulative PDF used to calculate e
         numpy array: hnu grid used to calculate PDF
     """
+
     if number is None:
         number=1
     if (pdf is None):
@@ -666,16 +668,16 @@ def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
 
     # its actually a cdf but being consistent with the original mistake
     pdf = mc_parms['pdf']
+    nu_list = mc_parms['nu_list']
 
-    print(number)
-    print(pdf)
-    print(energies)
-
-    # SOMETHING GOES WRONG HERE, LOOK AT IT TOMORROW
+    # DO I NEED THIS h*?
+    # i dont think so cause i wanna have nu on the x-axis, nothnu
+    # energies = [h*nu for nu in nu_list]
+    energies = [nu for nu in nu_list]
 
     e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)     
 
-    # is this additional step still needed?   
+    # DO I NEED THIS ADDITIONAL STEP?
     e*=mc_parms['kt_seeds']
     
     return(e)
@@ -705,7 +707,6 @@ def conical_jet():
     # Zdziarski et al 2022:
     gamma = 3
     v = gamma_to_velo(gamma)
-    print("jet velocity for gamma = {}: {:e}".format(gamma, v))
 
     # Zdziarski et al 2022:
     jet_opening_angle = 1.5
@@ -725,6 +726,7 @@ def conical_jet():
     number_photons_list = []
 
     slice_counter = 0
+    hnu_scattered_list = []
 
     for s in cone_size[:-1]:
         fluxes = []
@@ -770,8 +772,6 @@ def conical_jet():
                 cut_off_found = True
                 cut_off_energy = nu_list[fluxes.index(flux)] * h
 
-        print("cutoff-frequency: {:e}".format(cut_off_energy / h))
-
         # calculate number photons per nu per slice
         number_photons = [fluxes[i] / (h*nu_list[i]) for i in range(len(fluxes))]
         number_photons_list.append(number_photons)
@@ -781,18 +781,23 @@ def conical_jet():
         # and then a cdf (cumulative density distribution)
         # (see explanation on Jeff's piece of paper)
 
-        pdf = number_photons / integrate.simps(number_photons)
+        # total number of photons for the slice, to normalize:
+        number_photons_total_slice = integrate.simps(number_photons)
+        pdf = number_photons / number_photons_total_slice
         cdf = np.cumsum(pdf)
 
-        plt.plot(nu_list, cdf, label="CDF")
-        plt.legend()
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.show()
+        print(number_photons_total_slice)
 
-        # FIX n_photons! use intensity?
-        # FIX kt_seeds
-        mc_parms={'n_photons': 1000,
+        # we need to input a number of photons and scale this per slice
+        # the first slice has the most photons: normalize that to norm_goal_photons
+        # by dividing each slice by norm_factor_photons and multiplying by norm_goal_photons
+        if slice_counter == 0:
+            norm_fac = 10000 / number_photons_total_slice
+        n_photons = norm_fac * number_photons_total_slice
+        n_photons = int(n_photons)
+
+        # FIX kt_seeds (was 1.6e-9 in example) (has very little effect)
+        mc_parms={'n_photons': n_photons,
                     'kt_seeds': 1.6e-9,
                     # might be s ipv r, ask/check later
                     'H':r,
@@ -804,32 +809,45 @@ def conical_jet():
                     'hnu_dist':f_of_hnu_synchro,
                     # i know the nomenclature is off, but im being consitent with the original mistake
                     'pdf': cdf,
+                    'nu_list':nu_list,
                     }
     
+        # do the monte carlo for each slice (not sure exactly how it works yet)
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
 
-        bins=None
-        xlims=None
-        if (xlims is None):
-            xlims=[hnu_scattered.min(),hnu_scattered.max()]
-        if (bins is None):
-            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-        else:
-            bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+        # to get back to a flux, multiply by energy hnu and remove normalisation
+        hnu_scattered = [N/norm_fac * h*nu for N in hnu_scattered for nu in nu_list]
 
-        plt.hist(hnu_scattered,bins=bins,log=True,
-                label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-        plt.xscale('log')
-        plt.xlim(xlims[0],xlims[1])
-        plt.xlabel(r'$h\nu/h\nu_{0}$',fontsize=20)
-        plt.ylabel(r'$N(h\nu)$',fontsize=20)
-        plt.legend()
-        plt.show()
+        hnu_scattered_list.append(hnu_scattered)
 
         # keep track of which slice were at and let us know :)
         slice_counter += 1
-        print("Slice {} made".format(slice_counter))
+        # print("Slice {} made".format(slice_counter))
+    
+    # unpack list of lists into single list
+    hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
+    hnu_scattered_list = np.array(hnu_scattered_list)
 
+    # plot monte carlo total
+    bins=None
+    xlims=None
+    if (xlims is None):
+        xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
+    if (bins is None):
+        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+    else:
+        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+    plt.hist(hnu_scattered_list,bins=bins,log=True,
+            label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+    plt.xscale('log')
+    plt.xlim(xlims[0],xlims[1])
+    plt.xlabel(r'$\nu$')
+    plt.ylabel(r'$N$')
+    plt.legend()
+    plt.show()
+
+    exit()
 
     # plot nuFnu for each slice
     for fluxes in fluxes_list:
