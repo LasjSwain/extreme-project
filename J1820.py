@@ -52,6 +52,7 @@ M_J1820 = 8.48 * M_sun
 
 # This distance implies that the source reached (15 ± 3) per cent of the 
 # Eddington luminosity at the peak of its outburst. 
+# Atri et al 2020:
 # https://www.researchgate.net/publication/338704321_A_radio_parallax_to_the_black_hole_X-ray_binary_MAXI_J1820070
 D_J1820 = 2.96 * 10**3 * pc
 
@@ -508,7 +509,7 @@ def main():
     m = m_e
     pitch_angle = math.pi / 2
 
-    # old, but keep using for now (PS3 Sols)
+    # Abe et al 2022:
     p = 2.4
     gamma_min = 1
     gamma_max = 10**2
@@ -554,13 +555,6 @@ def main():
 
             flux = intensity_jet * 4 * math.pi
 
-            # we want the units to be in erg cm^-2 s^-1 for comparison
-            # to spectrum in paper, so technically this is then nuFnu
-            # flux /= nu??
-            # flux *= nu
-            # flux = flux??
-            # THIS SHOULD BE DONE WAY LATER IN CODE TO PREVENT FUCKING WITH NUMBER PHOTONS
-
             # correct for distance and emitting surface (cylinder)
             flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
             fluxes.append(flux_earth)
@@ -572,7 +566,7 @@ def main():
             if flux < fluxes[0] and cut_off_found == False:
                 cut_off_found = True
                 cut_off_energy = nu_list[fluxes.index(flux)] * h
-        # tau = 0.1
+
         # calculate number photons per nu per slice
         number_photons = [fluxes[i] / (h*nu_list[i]) for i in range(len(fluxes))]
         number_photons_list.append(number_photons)
@@ -595,13 +589,14 @@ def main():
         n_photons = norm_fac * number_photons_total_slice
         n_photons = int(n_photons)
 
-        # normalize to get PDF wqith surface of 1
+        # normalize to get PDF with surface of 1
         powerlaw_norm = quad(powerlaw, gamma_min, gamma_max, args=(p))[0]
 
         mc_parms = {'n_photons': n_photons,
                     'kt_seeds': 1.6e-9,
                     'H':r,
-                    'tau':tau,
+                    # or maybe tau, SEE TOMORROW
+                    'tau':0.1,
                     'kt_electron':cut_off_energy,
                     'v_dist':f_of_v_powerlaw,
                     'hnu_dist':f_of_hnu_synchro,
@@ -622,8 +617,6 @@ def main():
         for nu in hnu_scattered:
             # find closest value in nu_list
             # https://www.geeksforgeeks.org/python-find-closest-number-to-k-in-given-list/
-            # most closest nu's are now the last one, this maybe has to do with a log scale? 
-            # that they always fall into that bin?
             closest_nu = nu_list[min(range(len(nu_list)), key = lambda i: abs(nu_list[i]-nu))]
             N_list[nu_list.index(closest_nu)] += 1
 
@@ -632,9 +625,12 @@ def main():
             N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]**2
 
         IC_fluxes.append(N_list)
-        # for nu in nu_list:
+
+        # we want the units to be in erg cm^-2 s^-1 for comparison
+        # to spectrum in paper, so this is then nuFnu
         fluxes = [fluxes[i]*nu_list[i] for i in range(len(fluxes))]
         fluxes_list.append(fluxes)
+
         intensities_list.append(intensities)
 
         hnu_scattered_list.append(hnu_scattered)
@@ -648,69 +644,42 @@ def main():
     N = np.zeros(number)
     gamma = np.logspace(np.log10(gamma_min),np.log10(gamma_max),number)
 
+    # SERA'S MAIL: DO WE WANNA ALSO PLOT: (sampled gamma's)
+    # --for the electrons, ideally you can plot the analytical distribution (power law or Maxwellian)
+    # vs the distribution that you get when you sample that distribution for each scatter
+
+    # plot electron powerlaw distribution
     for i in range(number):
         N[i] = powerlaw_PDF(gamma[i], mc_parms['p'], mc_parms['powerlaw_norm'])
+
     plt.loglog(gamma,N)
     plt.xlabel('$\gamma$',fontsize=20)
     plt.ylabel('N($\gamma$)',fontsize=20)
+    plt.title("Electron powerlaw distribution for p={}".format(p))
     plt.show()
 
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
     hnu_scattered_list = np.array(hnu_scattered_list)
 
-    # plot monte carlo total
-    # bins=None
-    # xlims=None
-    # if (xlims is None):
-    #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
-    # if (bins is None):
-    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-    # else:
-    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-    # plt.hist(hnu_scattered_list,bins=bins,log=True,
-    #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-    # plt.xscale('log')
-    # plt.xlim(xlims[0],xlims[1])
-    # plt.xlabel(r'$\nu$')
-    # plt.ylabel(r'$N$')
-    # plt.legend()
-    # plt.show()
-
     # plot Fnu for each slice
-    # for fluxes in fluxes_list:
-    #     plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
-
-    # for IC_flux in IC_fluxes:
-    #     plt.scatter(nu_list, IC_flux)
+    count = 0
+    for fluxes in fluxes_list:
+        count += 1
+        plt.plot(nu_list, fluxes, label='Slice {}'.format(count), linestyle='dashed')
 
     # plot total Fnu per nu
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
 
-    # plot total IC_flux
-    # plt.plot(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
-
     plt.xlabel(r"$\nu\ [Hz]$")
+    # OONITS
     # change units if i multiply flux by nu or something idk
-    plt.ylabel(r"\nu\ $F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
-    plt.title("Input photon spectrum (synchrotron")
+    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.title("Input photon spectrum (synchrotron)")
     plt.xscale("log")
     plt.yscale("log")
+    plt.legend()
     plt.show()
-
-    # plot Inu for each slice
-    # for intensities in intensities_list:
-    #     plt.plot(nu_list, intensities, label='r={:e}'.format(r), linestyle='dashed')
-
-    # # plot total Inu
-    # plt.plot(nu_list, np.sum(np.array(intensities_list), 0), color='black')
-    # plt.xlabel(r"$\nu\ [Hz]$")
-    # plt.ylabel(r"$I_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
-    # plt.legend()
-    # plt.xscale("log")
-    # plt.yscale("log")
-    # plt.show()
 
     # plot number of photons for each slice
     # for number_photons in number_photons_list:
@@ -718,28 +687,29 @@ def main():
 
     # for IC_flux in IC_fluxes:
     #     plt.scatter(nu_list, IC_flux)
-
-    IC_fluxes_2 = IC_fluxes
+    
+    IC_nu_Fnu = IC_fluxes
     IC_fluxes = np.sum(np.array(IC_fluxes), 0)
 
+    # plot inverse compton scattered nuFnu spectrum
     plt.plot(nu_list, IC_fluxes, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"\nu\ $F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
     plt.show()
 
     # divide by h*nu**2 to get to a number of photons, to see whats happening
-    for IC_flux in IC_fluxes_2:
+    for IC_nufnu in IC_nu_Fnu:
         for i in range(len(nu_list)):
-            IC_flux[i] /= h*nu_list[i]**2
+            IC_nufnu[i] /= h*nu_list[i]**2
 
-    IC_fluxes_2 = np.sum(np.array(IC_fluxes_2), 0)
-
-    plt.scatter(nu_list, IC_fluxes_2, color='black')
+    # plot inverse compton scattered number of photons spectrum
+    IC_nu_Fnu = np.sum(np.array(IC_nu_Fnu), 0)
+    plt.scatter(nu_list, IC_nu_Fnu, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$\frac{F_{\nu}}{\nu}\ [oonits]$")
+    plt.ylabel(r"$Number of photons: \frac{F_{\nu}}{\nu}\ [oonits]$")
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
