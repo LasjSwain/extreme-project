@@ -5,7 +5,6 @@
 # and SSC (inverse Compton upscattering of local synchrotron photons) emission
 
 # PROJECT DESCRIPTION:
-# (later maybe move this to top of code but easier here now)
 
 # Assume a conical jet divided into ~10-20 slices (or more if your code runs fast)
 # Remember the jet is huge so divide into equal widths in log10(z) space!
@@ -465,132 +464,28 @@ def f_of_v_powerlaw(mc_parms):
 
     return gamma_to_velo(gamma_to_transform)
 
+# returns a hnu value from synchrotron input spectrum
 def hnu_of_p_synchro(number=None,pdf=None,hnu=None):
 
     e_phot=np.interp(np.random.rand(number),pdf,hnu)
 
     return(e_phot,pdf,hnu)
 
-def f_of_hnu_mono(mc_parms,number=None):
-    """Returns randomly drawn velocity from distribution function
-    
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
-    
-    Parameters:
-        number (integer): Number of photon energies to generate
-
-    Returns:
-        numpy array: seed photon energies drawn from photon distribution
-    """
-    if number is None:
-        number=1
-    return(np.ones(number)*mc_parms['kt_seeds'])
-
-def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
-    """Returns randomly drawn photon energy from a Planck distribution
-    
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
-
-    Parameters:
-        pdf (numpy array): Previously calculated Planck PDF
-        hnu (numpy array): energy grid for PDF
-
-    Returns:
-        numpy array: seed photon energies drawn from photon distribution
-    """
-    
-    if number is None:
-        number=1
-    if (pdf is None):
-        e,pdf,energies=hnu_of_p_planck(number=number)
-    else:
-        e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)
-
-    # plt.plot(energies)
-    # plt.yscale('log')
-    # plt.show()
-
-    # print(e.min())
-    # print(sum(e)/len(e))
-    # print(e.max())
-    # exit()
-
-    e*=mc_parms['kt_seeds']
-    
-    return(e)
-
+# returns an energy value from the synchrotron input spectrum
 def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
-
-    # does what f_of_hnu_planck does but then with synchro input instead of planck
-    # changes to this compared to planck:
-    # 1) got rid of if number is none (is it ever none?)
-    # 2) got rid of if pdf is none as i now define a pdf
 
     # its actually a cdf but being consistent with the original mistake
     pdf = mc_parms['pdf']
     nu_list = mc_parms['nu_list']
 
-    # DO I NEED THIS h*?
-    # i dont think so cause i wanna have nu on the x-axis, nothnu
-    # energies = [h*nu for nu in nu_list]
     energies = [nu for nu in nu_list]
 
     e,pdf,energies=hnu_of_p_synchro(number=number,pdf=pdf,hnu=energies)
-
-    # plt.plot(energies)
-    # plt.yscale('log')
-    # plt.show()
-
-    # print(e)
-    # print("\n\n")
-    # print(energies)
-    # exit()
-
-    # DO I NEED THIS ADDITIONAL STEP?
-    # i think so, mono and planck do it as well
-    # but their e's are different, so this NEEDS TO CHANGE
     e*=mc_parms['kt_seeds']
-
-    # print(e)
-    # print("\n\n")
-    # print(energies)
-    # exit()
     
     return(e)
 
-# this is literally copied from Rahuls picture so it better work :(
-def running_mean_convolve(x, N):
-    return np.convolve(x, np.ones(N) / float(N), 'valid')
-
-# this is literally copied from Rahuls picture so it better work :(
-def num_to_flux(hnu_scattered, mc_parms):
-    N_hnu, bin_array = np.histogram(hnu_scattered, bins=100)
-    avg_bin_array = running_mean_convolve(bin_array, 2) * mc_parms['kt_seeds'] / h
-    flux = (N_hnu * h * avg_bin_array) / (2*np.pi*mc_parms['H']**2)
-
-    plt.loglog(avg_bin_array, flux)
-    plt.xlabel(r'$\nu$')
-    plt.ylabel(r'F_{\nu}$')
-    plt.show()
-
-    return flux, avg_bin_array
-
-
-# NOTES ON WHAT TO CHANGE TO INTEGRATE
-# both n_photons needs to have some sort of value; idk what
-# kt_seeds: use energy of photon at specific (h)nu
-# velocity in mc_parms has to be the same as velocity in the jet: v gamma_to_velo
-# in mc_parms, a tau is given as input, while in the jet, its calculated: make this consistent in some way
-# in mc_parms, H~R~100R_g -> in jet, 10r_g is used. make consistent
-# kt_electron: "At high energies, the spectrum displays a characteristic cutoff that indicates the electron temperature."
-# src: file:///C:/Users/lars1/Downloads/c9890edb-82da-4382-847e-d67b10a4a6eb.pdf
-# for frequency distribution, use synchrotron jet output (dirks idea)
-
-# START CONICAL JET PART (PS3)
-
-def conical_jet():
+def main():
 
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
@@ -603,8 +498,6 @@ def conical_jet():
     # Zdziarski et al 2022:
     gamma = 3
     v = gamma_to_velo(gamma)
-    # print(gamma_to_velo(1000)/c)
-    # exit()
 
     # Zdziarski et al 2022:
     jet_opening_angle = 1.5
@@ -612,15 +505,8 @@ def conical_jet():
 
     doppler_factor = 1/(gamma*(1-v*np.cos(incl_angle)/c))
 
-    # adjust Qj to get same SSA peak as in data
-    Qj = 10**58
     m = m_e
     pitch_angle = math.pi / 2
-
-    # source?
-    # p = 1.66
-    # gamma_min = 1
-    # gamma_max = 10**2
 
     # old, but keep using for now (PS3 Sols)
     p = 2.4
@@ -642,21 +528,14 @@ def conical_jet():
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
         # STUFF FROM PS3 SOLS:
+        # Zdziarski et al 2022:
+        # B0 = 10**4 G
         B_initial = 10**8.5
         phi_B = B_initial*r0*cone_size[:-1][0]
         B = phi_B / (r*cone_size_diff[slice_counter])
         Ub = B**2/(8*np.pi)
         Ue = Ub
         C = Ue/np.log(gamma_max)
-
-        # OWN OLD STUFF:
-        # Zdziarski et al 2022:
-        # B0 = 10**4 G
-        # Ue0 = Qj / (math.pi * r0**2 * v)
-        # Ub0 = Ue0
-        # B0 = (8*math.pi * Ub0)**(1/2)
-        # B = B0 * (r*cone_size_diff[slice_counter])**(-1)
-        # C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
 
         for nu in nu_list:
 
@@ -693,7 +572,7 @@ def conical_jet():
             if flux < fluxes[0] and cut_off_found == False:
                 cut_off_found = True
                 cut_off_energy = nu_list[fluxes.index(flux)] * h
-
+        # tau = 0.1
         # calculate number photons per nu per slice
         number_photons = [fluxes[i] / (h*nu_list[i]) for i in range(len(fluxes))]
         number_photons_list.append(number_photons)
@@ -719,14 +598,10 @@ def conical_jet():
         # normalize to get PDF wqith surface of 1
         powerlaw_norm = quad(powerlaw, gamma_min, gamma_max, args=(p))[0]
 
-        # FIX kt_seeds (was 1.6e-9 in example) (has very little effect)
         mc_parms = {'n_photons': n_photons,
                     'kt_seeds': 1.6e-9,
-                    # might be s ipv r, ask/check later
                     'H':r,
-                    'velocity':v,
-                    # should use tau from calculations, but that one is tiny so doesnt give any scattering
-                    'tau':0.1,
+                    'tau':tau,
                     'kt_electron':cut_off_energy,
                     'v_dist':f_of_v_powerlaw,
                     'hnu_dist':f_of_hnu_synchro,
@@ -742,28 +617,6 @@ def conical_jet():
         # do the monte carlo for each slice
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
 
-        # Rahuls stuff, doesnt seem to work here at least
-        # flux, avg_bin_array = num_to_flux(hnu_scattered, mc_parms)
-        # exit()
-
-        # bins=None
-        # xlims=None
-        # if (xlims is None):
-        #     xlims=[hnu_scattered.min(),hnu_scattered.max()]
-        # if (bins is None):
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-        # else:
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-        # plt.hist(hnu_scattered,bins=bins,log=True,
-        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-        # plt.xscale('log')
-        # plt.xlim(xlims[0],xlims[1])
-        # plt.xlabel(r'$\nu$')
-        # plt.ylabel(r'$N$')
-        # plt.legend()
-        # plt.show()
-
         # convert this histogram type thing to a number_photons vs frequency
         N_list = [0 for nu in nu_list]
         for nu in hnu_scattered:
@@ -774,19 +627,9 @@ def conical_jet():
             closest_nu = nu_list[min(range(len(nu_list)), key = lambda i: abs(nu_list[i]-nu))]
             N_list[nu_list.index(closest_nu)] += 1
 
-        # plt.loglog(nu_list, N_list)
-        # plt.show()
-        # exit()
-
         # to get back to a flux, multiply by energy hnu and remove normalisation
         for i in range(len(N_list)):
             N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]**2
-            # N_list[i] = (N_list[i]/norm_fac)
-            # N_list[i] = N_list[i]
-
-        # plt.loglog(nu_list, N_list)
-        # plt.show()
-        # exit()
 
         IC_fluxes.append(N_list)
         # for nu in nu_list:
@@ -879,24 +722,6 @@ def conical_jet():
     IC_fluxes_2 = IC_fluxes
     IC_fluxes = np.sum(np.array(IC_fluxes), 0)
 
-    # print(len(IC_fluxes))
-    # virgin = True
-    # for i in range(len(IC_fluxes)):
-    #     if IC_fluxes[i] == 0:
-    #         if virgin == True:
-    #             new_IC_fluxes = np.delete(IC_fluxes, i)
-    #             new_nu_list = np.delete(nu_list, i)
-    #             virgin = False
-    #         else:
-    #             new_IC_fluxes = np.delete(new_IC_fluxes, i)
-    #             new_nu_list = np.delete(new_nu_list, i)
-
-    # print(len(new_IC_fluxes))
-
-    # exit()
-
-    # IC_fluxes = scipy.ndimage.uniform_filter1d(IC_fluxes)
-
     plt.plot(nu_list, IC_fluxes, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
     plt.ylabel(r"\nu\ $F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
@@ -922,4 +747,4 @@ def conical_jet():
 
     return
 
-conical_jet()
+main()
