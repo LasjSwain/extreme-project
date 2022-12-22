@@ -594,18 +594,18 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
     if (pdf is None):
         pdf,hnu=p_planck()
 
-    print(hnu.min())
-    print(sum(hnu)/len(hnu))
-    print(hnu.max())
+    # print(hnu.min())
+    # print(sum(hnu)/len(hnu))
+    # print(hnu.max())
 
-    plt.plot(pdf)
-    plt.yscale('log')
-    plt.show()
+    # plt.plot(pdf)
+    # plt.yscale('log')
+    # plt.show()
 
-    plt.plot(hnu)
-    plt.yscale('log')
-    plt.show()
-    exit()
+    # plt.plot(hnu)
+    # plt.yscale('log')
+    # plt.show()
+    # exit()
 
     e_phot=np.interp(np.random.rand(number),pdf,hnu)
 
@@ -684,14 +684,14 @@ def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
     else:
         e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)
 
-    plt.plot(energies)
-    plt.yscale('log')
-    plt.show()
+    # plt.plot(energies)
+    # plt.yscale('log')
+    # plt.show()
 
-    print(e.min())
-    print(sum(e)/len(e))
-    print(e.max())
-    exit()
+    # print(e.min())
+    # print(sum(e)/len(e))
+    # print(e.max())
+    # exit()
 
     e*=mc_parms['kt_seeds']
     
@@ -731,6 +731,24 @@ def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
     
     return(e)
 
+# this is literally copied from Rahuls picture so it better work :(
+def running_mean_convolve(x, N):
+    return np.convolve(x, np.ones(N) / float(N), 'valid')
+
+# this is literally copied from Rahuls picture so it better work :(
+def num_to_flux(hnu_scattered, mc_parms):
+    N_hnu, bin_array = np.histogram(hnu_scattered, bins=100)
+    avg_bin_array = running_mean_convolve(bin_array, 2) * mc_parms['kt_seeds'] / h
+    flux = (N_hnu * h * avg_bin_array) / (2*np.pi*mc_parms['H']**2)
+
+    plt.loglog(avg_bin_array, flux)
+    plt.xlabel(r'$\nu$')
+    plt.ylabel(r'F_{\nu}$')
+    plt.show()
+
+    return flux, avg_bin_array
+
+
 # NOTES ON WHAT TO CHANGE TO INTEGRATE
 # both n_photons needs to have some sort of value; idk what
 # kt_seeds: use energy of photon at specific (h)nu
@@ -747,7 +765,7 @@ def conical_jet():
 
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
-    number_slices = 10
+    number_slices = 1
     cone_size = [s for s in np.logspace(0, 3, number_slices+1)]
     cone_size_diff = np.diff(cone_size)
     r0 = 10*Rg(M_J1820)
@@ -781,6 +799,7 @@ def conical_jet():
     nu_list = [nu for nu in np.logspace(11.5, 26, 1000)]
     fluxes_list = []
     number_photons_list = []
+    intensities_list = []
 
     slice_counter = 0
     hnu_scattered_list = []
@@ -788,24 +807,25 @@ def conical_jet():
 
     for s in cone_size[:-1]:
         fluxes = []
+        intensities = []
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
         # STUFF FROM PS3 SOLS:
-        # B_initial = 10**7
-        # phi_B = B_initial*r0*cone_size[:-1][0]
-        # B = phi_B / (r*cone_size_diff[slice_counter])
-        # Ub = B**2/(8*np.pi)
-        # Ue = Ub
-        # C = Ue/np.log(gamma_max)
+        B_initial = 10**7
+        phi_B = B_initial*r0*cone_size[:-1][0]
+        B = phi_B / (r*cone_size_diff[slice_counter])
+        Ub = B**2/(8*np.pi)
+        Ue = Ub
+        C = Ue/np.log(gamma_max)
 
         # OWN OLD STUFF:
-        Ue0 = Qj / (math.pi * r0**2 * v)
-        Ub0 = Ue0
-        B0 = (8*math.pi * Ub0)**(1/2)
         # Zdziarski et al 2022:
         # B0 = 10**4 G
-        B = B0 * (r*cone_size_diff[slice_counter])**(-1)
-        C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
+        # Ue0 = Qj / (math.pi * r0**2 * v)
+        # Ub0 = Ue0
+        # B0 = (8*math.pi * Ub0)**(1/2)
+        # B = B0 * (r*cone_size_diff[slice_counter])**(-1)
+        # C = Ue0 * (r*cone_size_diff[slice_counter])**(-2) / math.log(gamma_max)
 
         for nu in nu_list:
 
@@ -815,11 +835,8 @@ def conical_jet():
             # extinction_coeff units: cm^-1
             # source_func_jet units: erg cm^-2 s^-1 Hz^-1
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
+            # tau units: cm^-1 * cm = unitless
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
-
-            # tau is giving different numbers than ps3 sols
-            # very high values at start of slice? ps3 sols also does that but kinda weird
-            print(extinction_coeff(e, m, C, B, pitch_angle, p, nu))
 
             # intensity_jet units: erg cm^-2 s^-1 Hz^-1
             # for [Jy], multiply intensity_jet by 10**23
@@ -837,8 +854,10 @@ def conical_jet():
             # correct for distance and emitting surface (cylinder)
             flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
             fluxes.append(flux_earth)
+            intensities.append(intensity_jet)
 
         fluxes_list.append(fluxes)
+        intensities_list.append(intensities)
 
         # find cutoff energy of slice
         cut_off_found = False
@@ -869,10 +888,8 @@ def conical_jet():
         n_photons = norm_fac * number_photons_total_slice
         n_photons = int(n_photons)
 
-        # print(n_photons)
-
         # normalize to get PDF wqith surface of 1
-        powerlaw_norm,error = quad(powerlaw, gamma_min, gamma_max, args=(p))
+        powerlaw_norm = quad(powerlaw, gamma_min, gamma_max, args=(p))[0]
 
         # FIX kt_seeds (was 1.6e-9 in example) (has very little effect)
         mc_parms = {'n_photons': n_photons,
@@ -894,22 +911,32 @@ def conical_jet():
                     'gamma_max':gamma_max,
                     }
 
-        # do the monte carlo for each slice (not sure exactly how it works yet)
+        # do the monte carlo for each slice
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
+
+        # Rahuls stuff, doesnt seem to work here at least
+        # flux, avg_bin_array = num_to_flux(hnu_scattered, mc_parms)
+        # exit()
 
         # convert this histogram type thing to a number_photons vs frequency
         N_list = [0 for nu in nu_list]
         for nu in hnu_scattered:
             # find closest value in nu_list
             # https://www.geeksforgeeks.org/python-find-closest-number-to-k-in-given-list/
+            # most closest nu's are now the last one, this maybe has to do with a log scale? 
+            # that they always fall into that bin?
             closest_nu = nu_list[min(range(len(nu_list)), key = lambda i: abs(nu_list[i]-nu))]
             N_list[nu_list.index(closest_nu)] += 1
 
         # to get back to a flux, multiply by energy hnu and remove normalisation
-        # as the main plot is nuFnu, multiply by another factor of nu (**2)
         for i in range(len(N_list)):
-            # N_list[i] = N_list[i]/norm_fac * h*nu_list[i]
-            N_list[i] = N_list[i]/norm_fac * h*nu_list[i]**2
+            # N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]
+            # N_list[i] = (N_list[i]/norm_fac)
+            N_list[i] = N_list[i]
+
+        # plt.loglog(nu_list, N_list)
+        # plt.show()
+        # exit()
 
         IC_fluxes.append(N_list)
 
@@ -942,19 +969,35 @@ def conical_jet():
     plt.legend()
     plt.show()
 
-    # plot nuFnu for each slice
+    # plot Fnu for each slice
     for fluxes in fluxes_list:
         plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
     for IC_flux in IC_fluxes:
         plt.scatter(nu_list, IC_flux)
 
-    # plot total nuFnu per nu
+    # plot total Fnu per nu
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
     plt.scatter(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
 
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}]$")
+    # change units if i multiply flux by nu or something idk
+    plt.ylabel(r"$F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.legend()
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.show()
+
+    exit()
+
+    # plot Inu for each slice
+    for intensities in intensities_list:
+        plt.plot(nu_list, intensities, label='r={:e}'.format(r), linestyle='dashed')
+
+    # plot total Inu
+    plt.plot(nu_list, np.sum(np.array(intensities_list), 0), color='black')
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"$I_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
     plt.legend()
     plt.xscale("log")
     plt.yscale("log")
