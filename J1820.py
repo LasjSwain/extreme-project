@@ -28,6 +28,7 @@ import numpy as np
 import math
 
 # imports used in IC tutorial
+import scipy
 import scipy.integrate as integrate
 from scipy.integrate import quad
 
@@ -727,7 +728,12 @@ def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
     # DO I NEED THIS ADDITIONAL STEP?
     # i think so, mono and planck do it as well
     # but their e's are different, so this NEEDS TO CHANGE
-    # e*=mc_parms['kt_seeds']
+    e*=mc_parms['kt_seeds']
+
+    # print(e)
+    # print("\n\n")
+    # print(energies)
+    # exit()
     
     return(e)
 
@@ -765,7 +771,7 @@ def conical_jet():
 
     # "divided into ~10-20 slices"
     # "divide huge jet in equal widths in log10(z) space"
-    number_slices = 1
+    number_slices = 10
     cone_size = [s for s in np.logspace(0, 3, number_slices+1)]
     cone_size_diff = np.diff(cone_size)
     r0 = 10*Rg(M_J1820)
@@ -811,7 +817,7 @@ def conical_jet():
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
         # STUFF FROM PS3 SOLS:
-        B_initial = 10**7
+        B_initial = 10**8
         phi_B = B_initial*r0*cone_size[:-1][0]
         B = phi_B / (r*cone_size_diff[slice_counter])
         Ub = B**2/(8*np.pi)
@@ -847,7 +853,7 @@ def conical_jet():
             # we want the units to be in erg cm^-2 s^-1 for comparison
             # to spectrum in paper, so technically this is then nuFnu
             # flux /= nu??
-            # flux *= nu??
+            # flux *= nu
             # flux = flux??
             # THIS SHOULD BE DONE WAY LATER IN CODE TO PREVENT FUCKING WITH NUMBER PHOTONS
 
@@ -855,9 +861,6 @@ def conical_jet():
             flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
             fluxes.append(flux_earth)
             intensities.append(intensity_jet)
-
-        fluxes_list.append(fluxes)
-        intensities_list.append(intensities)
 
         # find cutoff energy of slice
         cut_off_found = False
@@ -918,6 +921,24 @@ def conical_jet():
         # flux, avg_bin_array = num_to_flux(hnu_scattered, mc_parms)
         # exit()
 
+        # bins=None
+        # xlims=None
+        # if (xlims is None):
+        #     xlims=[hnu_scattered.min(),hnu_scattered.max()]
+        # if (bins is None):
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+        # else:
+        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+
+        # plt.hist(hnu_scattered,bins=bins,log=True,
+        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+        # plt.xscale('log')
+        # plt.xlim(xlims[0],xlims[1])
+        # plt.xlabel(r'$\nu$')
+        # plt.ylabel(r'$N$')
+        # plt.legend()
+        # plt.show()
+
         # convert this histogram type thing to a number_photons vs frequency
         N_list = [0 for nu in nu_list]
         for nu in hnu_scattered:
@@ -928,17 +949,25 @@ def conical_jet():
             closest_nu = nu_list[min(range(len(nu_list)), key = lambda i: abs(nu_list[i]-nu))]
             N_list[nu_list.index(closest_nu)] += 1
 
+        # plt.loglog(nu_list, N_list)
+        # plt.show()
+        # exit()
+
         # to get back to a flux, multiply by energy hnu and remove normalisation
         for i in range(len(N_list)):
-            # N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]
+            N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]**2
             # N_list[i] = (N_list[i]/norm_fac)
-            N_list[i] = N_list[i]
+            # N_list[i] = N_list[i]
 
         # plt.loglog(nu_list, N_list)
         # plt.show()
         # exit()
 
         IC_fluxes.append(N_list)
+        # for nu in nu_list:
+        fluxes = [fluxes[i]*nu_list[i] for i in range(len(fluxes))]
+        fluxes_list.append(fluxes)
+        intensities_list.append(intensities)
 
         hnu_scattered_list.append(hnu_scattered)
 
@@ -951,63 +980,91 @@ def conical_jet():
     hnu_scattered_list = np.array(hnu_scattered_list)
 
     # plot monte carlo total
-    bins=None
-    xlims=None
-    if (xlims is None):
-        xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
-    if (bins is None):
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-    else:
-        bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
+    # bins=None
+    # xlims=None
+    # if (xlims is None):
+    #     xlims=[hnu_scattered_list.min(),hnu_scattered_list.max()]
+    # if (bins is None):
+    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
+    # else:
+    #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
 
-    plt.hist(hnu_scattered_list,bins=bins,log=True,
-            label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-    plt.xscale('log')
-    plt.xlim(xlims[0],xlims[1])
-    plt.xlabel(r'$\nu$')
-    plt.ylabel(r'$N$')
-    plt.legend()
-    plt.show()
+    # plt.hist(hnu_scattered_list,bins=bins,log=True,
+    #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
+    # plt.xscale('log')
+    # plt.xlim(xlims[0],xlims[1])
+    # plt.xlabel(r'$\nu$')
+    # plt.ylabel(r'$N$')
+    # plt.legend()
+    # plt.show()
 
     # plot Fnu for each slice
-    for fluxes in fluxes_list:
-        plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
+    # for fluxes in fluxes_list:
+    #     plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
 
-    for IC_flux in IC_fluxes:
-        plt.scatter(nu_list, IC_flux)
+    # for IC_flux in IC_fluxes:
+    #     plt.scatter(nu_list, IC_flux)
 
-    # plot total Fnu per nu
-    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
-    plt.scatter(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
+    # # plot total Fnu per nu
+    # plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
+    # plt.plot(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
 
-    plt.xlabel(r"$\nu\ [Hz]$")
-    # change units if i multiply flux by nu or something idk
-    plt.ylabel(r"$F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
-    plt.legend()
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.show()
-
-    exit()
+    # plt.xlabel(r"$\nu\ [Hz]$")
+    # # change units if i multiply flux by nu or something idk
+    # plt.ylabel(r"$F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    # plt.legend()
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.show()
 
     # plot Inu for each slice
-    for intensities in intensities_list:
-        plt.plot(nu_list, intensities, label='r={:e}'.format(r), linestyle='dashed')
+    # for intensities in intensities_list:
+    #     plt.plot(nu_list, intensities, label='r={:e}'.format(r), linestyle='dashed')
 
-    # plot total Inu
-    plt.plot(nu_list, np.sum(np.array(intensities_list), 0), color='black')
-    plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$I_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
-    plt.legend()
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.show()
+    # # plot total Inu
+    # plt.plot(nu_list, np.sum(np.array(intensities_list), 0), color='black')
+    # plt.xlabel(r"$\nu\ [Hz]$")
+    # plt.ylabel(r"$I_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    # plt.legend()
+    # plt.xscale("log")
+    # plt.yscale("log")
+    # plt.show()
+
+    # temp divide by nu again just to see
+    for IC_flux in IC_fluxes:
+        for i in range(len(nu_list)):
+            # IC_flux[i] /= h*nu_list[i]**2
+            IC_flux[i] = IC_flux[i]
 
     # plot number of photons for each slice
-    for number_photons in number_photons_list:
-        plt.plot(nu_list, number_photons, label='r={:e}'.format(r), linestyle='dashed')
+    # for number_photons in number_photons_list:
+    #     plt.plot(nu_list, number_photons, label='r={:e}'.format(r), linestyle='dashed')
 
-    plt.plot(nu_list, np.sum(np.array(number_photons_list), 0))
+    # for IC_flux in IC_fluxes:
+    #     plt.scatter(nu_list, IC_flux)
+
+    IC_fluxes = np.sum(np.array(IC_fluxes), 0)
+
+    # print(len(IC_fluxes))
+    # virgin = True
+    # for i in range(len(IC_fluxes)):
+    #     if IC_fluxes[i] == 0:
+    #         if virgin == True:
+    #             new_IC_fluxes = np.delete(IC_fluxes, i)
+    #             new_nu_list = np.delete(nu_list, i)
+    #             virgin = False
+    #         else:
+    #             new_IC_fluxes = np.delete(new_IC_fluxes, i)
+    #             new_nu_list = np.delete(new_nu_list, i)
+
+    # print(len(new_IC_fluxes))
+
+    # exit()
+
+    IC_fluxes = scipy.ndimage.uniform_filter1d(IC_fluxes)
+
+    plt.plot(nu_list, IC_fluxes, color='black')
+    # plt.plot(nu_list, np.sum(np.array(number_photons_list), 0), color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
     plt.ylabel("Number of photons")
     plt.xscale("log")
