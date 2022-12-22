@@ -800,6 +800,18 @@ def conical_jet():
         slice_counter += 1
         print("Slice {} made".format(slice_counter))
     
+    # show input electron distribution as a power law function
+    number = 1000
+    N = np.zeros(number)
+    gamma = np.logspace(np.log10(gamma_min),np.log10(gamma_max),number)
+
+    for i in range(number):
+        N[i] = powerlaw_PDF(gamma[i], mc_parms['p'], mc_parms['powerlaw_norm'])
+    plt.loglog(gamma,N)
+    plt.xlabel('$\gamma$',fontsize=20)
+    plt.ylabel('N($\gamma$)',fontsize=20)
+    plt.show()
+
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
     hnu_scattered_list = np.array(hnu_scattered_list)
