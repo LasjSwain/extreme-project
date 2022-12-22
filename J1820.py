@@ -87,15 +87,15 @@ def gamma_to_velo(gamma):
     return v
 
 # extinction coefficient used to calculate source function (R&L 6.53)
-def extinction_coeff(q, m, const_C, B, pitch_angle, p, nu):
+def extinction_coeff(q, m, C, B, pitch_angle, p, nu):
     alpha_nu = ((3**(1/2) * q**3) / (8*math.pi * m)) * (3*q / (2*math.pi* m**3 * c**5))**(p/2)
-    alpha_nu *= const_C * (B*math.sin(pitch_angle))**((p+2)/2) * nu**(-(p+4)/2)
+    alpha_nu *= C * (B*math.sin(pitch_angle))**((p+2)/2) * nu**(-(p+4)/2)
     alpha_nu *= math.gamma((3*p + 2) / 12) * math.gamma((3*p + 22) / 12)
     return alpha_nu
 
 # total power used to calculate source function (R&L 6.36)
-def power_nu(q, m, const_C, B, pitch_angle, p, nu):
-    Pnu = (3**(1/2) * q**3 * const_C * B * math.sin(pitch_angle))
+def power_nu(q, m, C, B, pitch_angle, p, nu):
+    Pnu = (3**(1/2) * q**3 * C * B * math.sin(pitch_angle))
     Pnu *= (2*math.pi * m * c**2 * (p+1))**(-1)
     Pnu *= ((m*c*2*math.pi*nu) / (3*q*B*math.sin(pitch_angle)))**(-(p-1)/2)
     Pnu *= math.gamma((p/4) + 19/12) * math.gamma((p/4) - 1/12)
@@ -461,35 +461,31 @@ def monte_carlo(mc_parms):
         hnu_scattered[i]=p_photon[0]*c
 
     # only return escaped photons and their seed energy
-    return(hnu_scattered[hnu_scattered > 0],hnu_seed[hnu_scattered > 0])
+    return hnu_scattered[hnu_scattered > 0], hnu_seed[hnu_scattered > 0]
 
 
 # a powerlaw distribution
-p=1.65
-gamma_min=1
-gamma_max=10**6
-
-def powerlaw(gamma):
+def powerlaw(gamma, p):
     return gamma**-p
 
-# normalize to get PDF wqith surface of 1
-norm,error = quad(powerlaw, gamma_min, gamma_max)
-
-def powerlaw_PDF(gamma):
-    return(powerlaw(gamma)/norm)
-
+def powerlaw_PDF(gamma, p, norm):
+    return(powerlaw(gamma, p)/norm)
 
 def f_of_v_powerlaw(mc_parms):
 
-    number = 1000
+    number = 100
     N = np.zeros(number)
-    gamma = np.logspace(0,6,number)
+    gamma = np.logspace(np.log10(mc_parms['gamma_min']),np.log10(mc_parms['gamma_max']),number)
+
+    p = mc_parms['p']
+    norm = mc_parms['powerlaw_norm']
 
     for i in range(number):
-        N[i] = quad(powerlaw_PDF, 1, gamma[i])[0]
+        N[i] = quad(powerlaw_PDF, 1, gamma[i], args=(p, norm))[0]
 
     gamma_to_transform = np.interp(np.random.rand(1), N, gamma)
-    print('get me out pls')
+    # print('get me out pls')
+
     return gamma_to_velo(gamma_to_transform)
 
 def f_of_v_maxwell(mc_parms):
@@ -593,11 +589,44 @@ def hnu_of_p_planck(number=None,pdf=None,hnu=None):
         numpy array: hnu grid used to calculate PDF
     """
 
-    # should both (number and pdf) always be given from f_of_hnu_synchro
-    # if number is None:
-    #     number=1
-    # if (pdf is None):
-    #     pdf,hnu=p_planck()
+    if number is None:
+        number=1
+    if (pdf is None):
+        pdf,hnu=p_planck()
+
+    print(hnu.min())
+    print(sum(hnu)/len(hnu))
+    print(hnu.max())
+
+    plt.plot(pdf)
+    plt.yscale('log')
+    plt.show()
+
+    plt.plot(hnu)
+    plt.yscale('log')
+    plt.show()
+    exit()
+
+    e_phot=np.interp(np.random.rand(number),pdf,hnu)
+
+    return(e_phot,pdf,hnu)
+
+def hnu_of_p_synchro(number=None,pdf=None,hnu=None):
+    """Numerically invert Planck PDF
+    
+    Args:
+        None
+        
+    Parameters:
+        planck_pdf (numpy array): Previously calculated Planck PDF
+        planck_hnu (numpy array): energy grid for PDF
+        number (integer): Number of photon energies to generate
+        
+    Returns:
+        numpy array: energies corresponding to p
+        numpy array: cumulative PDF used to calculate e
+        numpy array: hnu grid used to calculate PDF
+    """
 
     # eyeball_avg_hnu = 10**23.05
     # closest_hnu = hnu[min(range(len(hnu)), key = lambda i: abs(hnu[i]-eyeball_avg_hnu))]
@@ -634,29 +663,39 @@ def f_of_hnu_mono(mc_parms,number=None):
         number=1
     return(np.ones(number)*mc_parms['kt_seeds'])
 
-# def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
-#     """Returns randomly drawn photon energy from a Planck distribution
+def f_of_hnu_planck(mc_parms,number=None,pdf=None,energies=None):
+    """Returns randomly drawn photon energy from a Planck distribution
     
-#     Args:
-#         mc_parms (dictionary): Monte-Carlo parameters
+    Args:
+        mc_parms (dictionary): Monte-Carlo parameters
 
-#     Parameters:
-#         pdf (numpy array): Previously calculated Planck PDF
-#         hnu (numpy array): energy grid for PDF
+    Parameters:
+        pdf (numpy array): Previously calculated Planck PDF
+        hnu (numpy array): energy grid for PDF
 
-#     Returns:
-#         numpy array: seed photon energies drawn from photon distribution
-#     """
+    Returns:
+        numpy array: seed photon energies drawn from photon distribution
+    """
     
-#     if number is None:
-#         number=1
-#     if (pdf is None):
-#         e,pdf,energies=hnu_of_p_planck(number=number)
-#     else:
-#         e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)        
-#     e*=mc_parms['kt_seeds']
+    if number is None:
+        number=1
+    if (pdf is None):
+        e,pdf,energies=hnu_of_p_planck(number=number)
+    else:
+        e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)
+
+    plt.plot(energies)
+    plt.yscale('log')
+    plt.show()
+
+    print(e.min())
+    print(sum(e)/len(e))
+    print(e.max())
+    exit()
+
+    e*=mc_parms['kt_seeds']
     
-#     return(e)
+    return(e)
 
 def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
 
@@ -674,10 +713,21 @@ def f_of_hnu_synchro(mc_parms,number=None,pdf=None,energies=None):
     # energies = [h*nu for nu in nu_list]
     energies = [nu for nu in nu_list]
 
-    e,pdf,energies=hnu_of_p_planck(number=number,pdf=pdf,hnu=energies)     
+    e,pdf,energies=hnu_of_p_synchro(number=number,pdf=pdf,hnu=energies)
+
+    # plt.plot(energies)
+    # plt.yscale('log')
+    # plt.show()
+
+    # print(e)
+    # print("\n\n")
+    # print(energies)
+    # exit()
 
     # DO I NEED THIS ADDITIONAL STEP?
-    e*=mc_parms['kt_seeds']
+    # i think so, mono and planck do it as well
+    # but their e's are different, so this NEEDS TO CHANGE
+    # e*=mc_parms['kt_seeds']
     
     return(e)
 
@@ -717,9 +767,16 @@ def conical_jet():
     Qj = 10**58
     m = m_e
     pitch_angle = math.pi / 2
-    p = 1.66
-    gamma_max = 10**6
+
+    # source?
+    # p = 1.66
+    # gamma_min = 1
+    # gamma_max = 10**6
+
+    # old, but keep using for now (PS3 Sols)
+    p = 2
     gamma_min = 1
+    gamma_max = 10**2
 
     nu_list = [nu for nu in np.logspace(11.5, 26, 1000)]
     fluxes_list = []
@@ -760,6 +817,10 @@ def conical_jet():
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
 
+            # tau is giving different numbers than ps3 sols
+            # very high values at start of slice? ps3 sols also does that but kinda weird
+            print(extinction_coeff(e, m, C, B, pitch_angle, p, nu))
+
             # intensity_jet units: erg cm^-2 s^-1 Hz^-1
             # for [Jy], multiply intensity_jet by 10**23
             intensity_jet = source_func_jet * (1 - math.exp(-tau))
@@ -768,7 +829,9 @@ def conical_jet():
 
             # we want the units to be in erg cm^-2 s^-1 for comparison
             # to spectrum in paper, so technically this is then nuFnu
-            # flux *= nu
+            # flux /= nu??
+            # flux *= nu??
+            # flux = flux??
             # THIS SHOULD BE DONE WAY LATER IN CODE TO PREVENT FUCKING WITH NUMBER PHOTONS
 
             # correct for distance and emitting surface (cylinder)
@@ -808,8 +871,11 @@ def conical_jet():
 
         # print(n_photons)
 
+        # normalize to get PDF wqith surface of 1
+        powerlaw_norm,error = quad(powerlaw, gamma_min, gamma_max, args=(p))
+
         # FIX kt_seeds (was 1.6e-9 in example) (has very little effect)
-        mc_parms={'n_photons': n_photons,
+        mc_parms = {'n_photons': n_photons,
                     'kt_seeds': 1.6e-9,
                     # might be s ipv r, ask/check later
                     'H':r,
@@ -817,13 +883,17 @@ def conical_jet():
                     # should use tau from calculations, but that one is tiny so doesnt give any scattering
                     'tau':0.1,
                     'kt_electron':cut_off_energy,
-                    'v_dist':f_of_v_powerlaw,
+                    'v_dist':f_of_v_mono,
                     'hnu_dist':f_of_hnu_synchro,
                     # i know the nomenclature is off, but im being consitent with the original mistake
                     'pdf': pdf,
                     'nu_list':nu_list,
+                    'p': p,
+                    'powerlaw_norm': powerlaw_norm,
+                    'gamma_min':gamma_min,
+                    'gamma_max':gamma_max,
                     }
-    
+
         # do the monte carlo for each slice (not sure exactly how it works yet)
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
 
@@ -841,31 +911,7 @@ def conical_jet():
             # N_list[i] = N_list[i]/norm_fac * h*nu_list[i]
             N_list[i] = N_list[i]/norm_fac * h*nu_list[i]**2
 
-        # plt.loglog(nu_list, N_list)
-        # plt.show()
-        # exit()
-
         IC_fluxes.append(N_list)
-
-        # bins=None
-        # xlims=None
-        # if (xlims is None):
-        #     xlims=[hnu_scattered.min(),hnu_scattered.max()]
-        # if (bins is None):
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=100)
-        # else:
-        #     bins=np.logspace(np.log10(xlims[0]),np.log10(xlims[1]),num=bins)
-
-        # plt.hist(hnu_scattered,bins=bins,log=True,
-        #         label=r'$\tau=${:4.1f}'.format(mc_parms['tau']))
-        # plt.xscale('log')
-        # plt.xlim(xlims[0],xlims[1])
-        # plt.xlabel(r'$\nu$')
-        # plt.ylabel(r'$N$')
-        # plt.legend()
-        # plt.show()
-
-        # exit()
 
         hnu_scattered_list.append(hnu_scattered)
 
@@ -896,8 +942,6 @@ def conical_jet():
     plt.legend()
     plt.show()
 
-    # exit()
-
     # plot nuFnu for each slice
     for fluxes in fluxes_list:
         plt.plot(nu_list, fluxes, label='r={:e}'.format(r), linestyle='dashed')
@@ -915,8 +959,6 @@ def conical_jet():
     plt.xscale("log")
     plt.yscale("log")
     plt.show()
-
-    # exit()
 
     # plot number of photons for each slice
     for number_photons in number_photons_list:
