@@ -25,10 +25,8 @@
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import math
 
 # imports used in IC tutorial
-import scipy
 import scipy.integrate as integrate
 from scipy.integrate import quad
 
@@ -58,14 +56,6 @@ M_J1820 = 8.48 * M_sun
 # https://www.researchgate.net/publication/338704321_A_radio_parallax_to_the_black_hole_X-ray_binary_MAXI_J1820070
 D_J1820 = 2.96 * 10**3 * pc
 
-# SECTION: SUPPORTING FUNCTIONS
-# these may or may not be used during the rest of the code
-
-# volume of a sphere for a radius
-def vol_sphere(R):
-    vol = (4/3) * math.pi * R**3
-    return vol
-
 # gravitational radius for a mass
 def Rg(M):
     Rg = 2 * G * M / c**2
@@ -75,11 +65,6 @@ def Rg(M):
 def L_edd(M):
     L_edd = 4*math.pi * G * M * m_p * c / sigma_T
     return L_edd
-
-# the radius of the blob in this problem
-def blob_radius(R0, v, t):
-    R = R0*(1+v*t)
-    return R
 
 # calculate velocity from given Gamma factor
 def gamma_to_velo(gamma):
@@ -94,31 +79,11 @@ def extinction_coeff(q, m, C, B, pitch_angle, p, nu):
     alpha_nu *= math.gamma((3*p + 2) / 12) * math.gamma((3*p + 22) / 12)
     return alpha_nu
 
-# total power used to calculate source function (R&L 6.36)
-def power_nu(q, m, C, B, pitch_angle, p, nu):
-    Pnu = (3**(1/2) * q**3 * C * B * math.sin(pitch_angle))
-    Pnu *= (2*math.pi * m * c**2 * (p+1))**(-1)
-    Pnu *= ((m*c*2*math.pi*nu) / (3*q*B*math.sin(pitch_angle)))**(-(p-1)/2)
-    Pnu *= math.gamma((p/4) + 19/12) * math.gamma((p/4) - 1/12)
-    return Pnu
-
-# source function using ex_coeff and power (R&L 6.54)
-def source_func(q, m, const_C, B, pitch_angle, p, nu):
-    S_nu = power_nu(q, m, const_C, B, pitch_angle, p, nu)
-    S_nu *= (4*math.pi * extinction_coeff(q, m, const_C, B, pitch_angle, p, nu))**(-1)
-    return S_nu
-
-# intensity from the homogeneous slab solution
-def intensity(q, m, const_C, B, pitch_angle, p, nu, R_t):
-    tau_nu = extinction_coeff(q, m, const_C, B, pitch_angle, p, nu) * R_t
-    I = source_func(q, m, const_C, B, pitch_angle, p, nu) * (1 - math.exp(-tau_nu))
-    return I
-
-# START IC PART (PS4)
-
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def compton_y(pre,post):
     return(np.mean((post-pre)/pre))
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def random_direction(number=None):
     """Returns randomly oriented unit vectors.
 
@@ -147,6 +112,7 @@ def random_direction(number=None):
     sin_theta=np.sqrt(1 - cos_theta**2)
     return((np.array([sin_theta*cos_phi,sin_theta*sin_phi,cos_theta])).transpose())
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def photon_origin(number=None):
     """Returns emission location of a photon
     """
@@ -154,6 +120,7 @@ def photon_origin(number=None):
         number=1
     return(np.zeros([number,3]))
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def draw_seed_photons(mc_parms,number=None):
     """Returns a single seed photon
     
@@ -181,6 +148,7 @@ def draw_seed_photons(mc_parms,number=None):
 # Write a function that returns tau(P)
 #
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def tau_of_scatter():
     """Calculates optical depth a photon traveled to before interacting, given probability
     
@@ -218,6 +186,7 @@ def distance_of_scatter(mc_parms):
     
     return(distance)
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def scatter_location(x_old,p_photon,mc_parms):
     """This function goes through the steps of a single scattering
 
@@ -241,7 +210,7 @@ def scatter_location(x_old,p_photon,mc_parms):
     
     return(x_new)
 
-
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def draw_electron_velocity(mc_parms,p_photon):
     """Returns a randomized electron velocity vector for inverse 
        Compton scattering, taking relativistic foreshortening of the
@@ -258,6 +227,7 @@ def draw_electron_velocity(mc_parms,p_photon):
     n=draw_electron_direction(v,p_photon)
     return(v*n)
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def draw_electron_direction(v,p_photon):
     """Draw a randomized electron direction, taking account of the
        increase in photons flux from the foward direction, which
@@ -288,6 +258,7 @@ def draw_electron_direction(v,p_photon):
     n_new=(n_2*cosp+n_3*sinp)*sint + n_1*cost
     return(n_new/np.sqrt(np.sum(n_new**2)))
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def mu_of_p_electron(beta,p):
     """Invert probability for foreshortened effective
        Thomson scattering cross section, with
@@ -308,6 +279,7 @@ def mu_of_p_electron(beta,p):
 # Functions for general Lorentz transform
 #
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def lorentz_transform(p,v):
     """Returns general Lorentz transform
 
@@ -335,6 +307,7 @@ def lorentz_transform(p,v):
 # Calculate the scattering angle for a probability between 0 and 1
 #
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def cos_theta_thomson(p):
     """Invert P(<\theta) to calculate cos(theta)
         
@@ -353,6 +326,7 @@ def cos_theta_thomson(p):
 # Here we perform the Thomson scattering part of inverse Compton scatterin
 #
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def thomson_scatter(p_photon):
     """This function performs Thomson scattering on a photon
     
@@ -399,6 +373,7 @@ def thomson_scatter(p_photon):
 # 3. Lorentz transform back to the observer's frame
 #
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def inverse_compton_scatter(p_photon,mc_parms):
     """This function performs an iteration of inverse Compton scattering off an electron of velocity v_vec.
     
@@ -421,6 +396,7 @@ def inverse_compton_scatter(p_photon,mc_parms):
     # transform back to observer frame
     return(lorentz_transform(p_out_prime,-velocity))
 
+# copied from IC-MC tutorial by Sebastian Heinz, University of Wisconsin-Madison
 def monte_carlo(mc_parms):
     """Perform a simple Monte-Carlo simulation
 
@@ -464,14 +440,15 @@ def monte_carlo(mc_parms):
     # only return escaped photons and their seed energy
     return hnu_scattered[hnu_scattered > 0], hnu_seed[hnu_scattered > 0]
 
-
 # a powerlaw distribution
 def powerlaw(gamma, p):
     return gamma**-p
 
+# normalise the powerlaw function to get a PDF
 def powerlaw_PDF(gamma, p, norm):
     return(powerlaw(gamma, p)/norm)
 
+# returns a single randomly drawn velocity from powerlaw_PDF
 def f_of_v_powerlaw(mc_parms):
 
     number = 100
@@ -485,168 +462,12 @@ def f_of_v_powerlaw(mc_parms):
         N[i] = quad(powerlaw_PDF, 1, gamma[i], args=(p, norm))[0]
 
     gamma_to_transform = np.interp(np.random.rand(1), N, gamma)
-    # print('get me out pls')
-
-    # print(gamma_to_transform)
 
     return gamma_to_velo(gamma_to_transform)
 
-def f_of_v_maxwell(mc_parms):
-    """Returns a single randomly drawn velocity from distribution function
-    
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
-
-    Returns:
-        real: electron velocity drawn from distribution
-    """
-    
-    # we need to draw x, y, and z velocity from a Maxwell-Boltzmann distribution'
-    # and calculate the resulting speed. This is a non-relativistic Maxwelleian,
-    # so me must truncate it below c.
-    
-    v=3e10 # needed for clipping...
-    while v >= c:
-        v=np.sqrt(mc_parms['kt_electron']/(m_e))*np.sqrt(np.sum((np.random.normal(0,1,3))**2))
-    
-    return(v)
-
-def f_of_v_mono(mc_parms):
-    """Returns a single randomly drawn velocity from distribution function
-    
-    Args:
-        mc_parms (dictionary): Monte-Carlo parameters
-
-    Returns:
-        real: electron velocity drawn from distribution
-    """
-    
-    return(mc_parms['velocity'])
-
-#
-# For comparison, let's define a Maxwellian
-#
-
-def maxwellian(v,kT):
-    """Calculate a non-relativistic Maxwellian
-    
-    Args:
-        v (real): Velocity
-        kT (real): temperature in energy units
-    
-    Returns:
-        value of the Maxwellian at v
-    """    
-    return(v**2*np.sqrt(2/np.pi*(m_e/kT)**3)*np.exp(-(m_e*v**2/(2*kT))))
-
-#
-# In case you want to improve on the seed photon distribution, this will be helpful
-# Note that the photon distribution function goes as nu^2, not nu^3
-#
-
-def f_planck(x):
-    """Photon distribution function of a Planck distribution
-    
-    Args:
-        x (real): photon energy e in untis of kT
-        
-    Returns:
-        real: differential photon number dN/de at energy e
-    """
-    norm=2.4041138063192817
-    return x**2/(np.exp(x)-1)/norm
-
-def p_planck(hnu=None):
-    """Numerical integration of cumulative planck PDF (to be inverted)
-    
-    Parameters:
-        hnu (numpy array): bins of photon energy e in units of kT
-        
-    Returns:
-        numpy array: cumulative photon PDF as function of hnu
-        numpy array: hnu values used for PDF
-    """
-    if (hnu is None):
-        number=1000
-        hnu=np.append(np.linspace(0,1-1./number,number),np.logspace(0,4,number))
-
-    p=np.zeros(2*number)
-    for i in range(1,2*number):
-        p[i]=(quad(f_planck,0,hnu[i]))[0]
-    return (p,hnu)
-
-def hnu_of_p_planck(number=None,pdf=None,hnu=None):
-    """Numerically invert Planck PDF
-    
-    Args:
-        None
-        
-    Parameters:
-        planck_pdf (numpy array): Previously calculated Planck PDF
-        planck_hnu (numpy array): energy grid for PDF
-        number (integer): Number of photon energies to generate
-        
-    Returns:
-        numpy array: energies corresponding to p
-        numpy array: cumulative PDF used to calculate e
-        numpy array: hnu grid used to calculate PDF
-    """
-
-    if number is None:
-        number=1
-    if (pdf is None):
-        pdf,hnu=p_planck()
-
-    # print(hnu.min())
-    # print(sum(hnu)/len(hnu))
-    # print(hnu.max())
-
-    # plt.plot(pdf)
-    # plt.yscale('log')
-    # plt.show()
-
-    # plt.plot(hnu)
-    # plt.yscale('log')
-    # plt.show()
-    # exit()
-
-    e_phot=np.interp(np.random.rand(number),pdf,hnu)
-
-    return(e_phot,pdf,hnu)
-
 def hnu_of_p_synchro(number=None,pdf=None,hnu=None):
-    """Numerically invert Planck PDF
-    
-    Args:
-        None
-        
-    Parameters:
-        planck_pdf (numpy array): Previously calculated Planck PDF
-        planck_hnu (numpy array): energy grid for PDF
-        number (integer): Number of photon energies to generate
-        
-    Returns:
-        numpy array: energies corresponding to p
-        numpy array: cumulative PDF used to calculate e
-        numpy array: hnu grid used to calculate PDF
-    """
-
-    # eyeball_avg_hnu = 10**23.05
-    # closest_hnu = hnu[min(range(len(hnu)), key = lambda i: abs(hnu[i]-eyeball_avg_hnu))]
-    # print(sum(pdf[:hnu.index(closest_hnu)]))
-    # print(sum(pdf[hnu.index(closest_hnu):]))
-
-    # exit()
 
     e_phot=np.interp(np.random.rand(number),pdf,hnu)
-
-    # THIS SEEMS TO STILL GIVE WEIRD VALUES, but leave for now and maybe come back later
-    # ok come back now this is too weird
-    # plt.loglog(pdf, hnu)
-    # plt.show()
-
-    # print("avg ephot", sum(e_phot) / len(e_phot))
-    # exit()
 
     return(e_phot,pdf,hnu)
 
@@ -1072,7 +893,7 @@ def conical_jet():
     plt.title("Spectrum after IC scattering")
     plt.show()
 
-    # temp divide by nu again just to see
+    # divide by h*nu**2 to get to a number of photons, to see whats happening
     for IC_flux in IC_fluxes_2:
         for i in range(len(nu_list)):
             IC_flux[i] /= h*nu_list[i]**2
@@ -1081,7 +902,7 @@ def conical_jet():
 
     plt.scatter(nu_list, IC_fluxes_2, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$\frac{F_{\nu}}{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.ylabel(r"$\frac{F_{\nu}}{\nu}\ [oonits]$")
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
