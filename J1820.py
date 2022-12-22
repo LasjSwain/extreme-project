@@ -487,6 +487,8 @@ def f_of_v_powerlaw(mc_parms):
     gamma_to_transform = np.interp(np.random.rand(1), N, gamma)
     # print('get me out pls')
 
+    # print(gamma_to_transform)
+
     return gamma_to_velo(gamma_to_transform)
 
 def f_of_v_maxwell(mc_parms):
@@ -780,6 +782,8 @@ def conical_jet():
     # Zdziarski et al 2022:
     gamma = 3
     v = gamma_to_velo(gamma)
+    # print(gamma_to_velo(1000)/c)
+    # exit()
 
     # Zdziarski et al 2022:
     jet_opening_angle = 1.5
@@ -795,10 +799,10 @@ def conical_jet():
     # source?
     # p = 1.66
     # gamma_min = 1
-    # gamma_max = 10**6
+    # gamma_max = 10**2
 
     # old, but keep using for now (PS3 Sols)
-    p = 2
+    p = 2.4
     gamma_min = 1
     gamma_max = 10**2
 
@@ -817,7 +821,7 @@ def conical_jet():
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
         # STUFF FROM PS3 SOLS:
-        B_initial = 10**8
+        B_initial = 10**8.5
         phi_B = B_initial*r0*cone_size[:-1][0]
         B = phi_B / (r*cone_size_diff[slice_counter])
         Ub = B**2/(8*np.pi)
@@ -903,7 +907,7 @@ def conical_jet():
                     # should use tau from calculations, but that one is tiny so doesnt give any scattering
                     'tau':0.1,
                     'kt_electron':cut_off_energy,
-                    'v_dist':f_of_v_mono,
+                    'v_dist':f_of_v_powerlaw,
                     'hnu_dist':f_of_hnu_synchro,
                     # i know the nomenclature is off, but im being consitent with the original mistake
                     'pdf': pdf,
@@ -1005,17 +1009,19 @@ def conical_jet():
     # for IC_flux in IC_fluxes:
     #     plt.scatter(nu_list, IC_flux)
 
-    # # plot total Fnu per nu
-    # plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
+    # plot total Fnu per nu
+    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
+
+    # plot total IC_flux
     # plt.plot(nu_list, np.sum(np.array(IC_fluxes), 0), color='black')
 
-    # plt.xlabel(r"$\nu\ [Hz]$")
-    # # change units if i multiply flux by nu or something idk
-    # plt.ylabel(r"$F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
-    # plt.legend()
-    # plt.xscale("log")
-    # plt.yscale("log")
-    # plt.show()
+    plt.xlabel(r"$\nu\ [Hz]$")
+    # change units if i multiply flux by nu or something idk
+    plt.ylabel(r"\nu\ $F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.title("Input photon spectrum (synchrotron")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.show()
 
     # plot Inu for each slice
     # for intensities in intensities_list:
@@ -1030,12 +1036,6 @@ def conical_jet():
     # plt.yscale("log")
     # plt.show()
 
-    # temp divide by nu again just to see
-    for IC_flux in IC_fluxes:
-        for i in range(len(nu_list)):
-            # IC_flux[i] /= h*nu_list[i]**2
-            IC_flux[i] = IC_flux[i]
-
     # plot number of photons for each slice
     # for number_photons in number_photons_list:
     #     plt.plot(nu_list, number_photons, label='r={:e}'.format(r), linestyle='dashed')
@@ -1043,6 +1043,7 @@ def conical_jet():
     # for IC_flux in IC_fluxes:
     #     plt.scatter(nu_list, IC_flux)
 
+    IC_fluxes_2 = IC_fluxes
     IC_fluxes = np.sum(np.array(IC_fluxes), 0)
 
     # print(len(IC_fluxes))
@@ -1061,15 +1062,29 @@ def conical_jet():
 
     # exit()
 
-    IC_fluxes = scipy.ndimage.uniform_filter1d(IC_fluxes)
+    # IC_fluxes = scipy.ndimage.uniform_filter1d(IC_fluxes)
 
     plt.plot(nu_list, IC_fluxes, color='black')
-    # plt.plot(nu_list, np.sum(np.array(number_photons_list), 0), color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel("Number of photons")
+    plt.ylabel(r"\nu\ $F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
     plt.xscale("log")
     plt.yscale("log")
-    plt.legend()
+    plt.title("Spectrum after IC scattering")
+    plt.show()
+
+    # temp divide by nu again just to see
+    for IC_flux in IC_fluxes_2:
+        for i in range(len(nu_list)):
+            IC_flux[i] /= h*nu_list[i]**2
+
+    IC_fluxes_2 = np.sum(np.array(IC_fluxes_2), 0)
+
+    plt.scatter(nu_list, IC_fluxes_2, color='black')
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"$\frac{F_{\nu}}{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.title("Spectrum after IC scattering")
     plt.show()
 
     return
