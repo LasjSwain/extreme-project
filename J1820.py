@@ -223,7 +223,7 @@ def draw_electron_velocity(mc_parms,p_photon):
        Returns:
            3-element numpy array: electron velocity
     """
-    v=mc_parms['v_dist'](mc_parms)
+    v=mc_parms['v_dist'](mc_parms)[0]
     n=draw_electron_direction(v,p_photon)
     return(v*n)
 
@@ -451,7 +451,7 @@ def powerlaw_PDF(gamma, p, norm):
 # returns a single randomly drawn velocity from powerlaw_PDF
 def f_of_v_powerlaw(mc_parms):
 
-    number = 100
+    number = 10000
     N = np.zeros(number)
     gamma = np.logspace(np.log10(mc_parms['gamma_min']),np.log10(mc_parms['gamma_max']),number)
 
@@ -463,7 +463,9 @@ def f_of_v_powerlaw(mc_parms):
 
     gamma_to_transform = np.interp(np.random.rand(1), N, gamma)
 
-    return gamma_to_velo(gamma_to_transform)
+    mc_parms['drawn_gammas'].append(gamma_to_transform[0])
+
+    return gamma_to_velo(gamma_to_transform), gamma_to_transform
 
 # returns a hnu value from synchrotron input spectrum
 def hnu_of_p_synchro(number=None,pdf=None,hnu=None):
@@ -523,18 +525,24 @@ def main():
     hnu_scattered_list = []
     IC_fluxes = []
 
+    # list with all drawn gammas to compare with the analytical distribution
+    drawn_gammas = []
+
+    # for each slice in the cone, calculate the Synchrotron spectrum and
+    # use that as input for the Inverse Compton Scattering
     for s in cone_size[:-1]:
         fluxes = []
         intensities = []
         r = r0 + s * math.tan(jet_opening_angle*math.pi/180)
 
-        # STUFF FROM PS3 SOLS:
         # Zdziarski et al 2022:
-        # B0 = 10**4 G
+        # B_initial = 10**4 G
         B_initial = 10**8.5
         phi_B = B_initial*r0*cone_size[:-1][0]
         B = phi_B / (r*cone_size_diff[slice_counter])
         Ub = B**2/(8*np.pi)
+
+        # Assume equipartition
         Ue = Ub
         C = Ue/np.log(gamma_max)
 
@@ -546,21 +554,21 @@ def main():
             # extinction_coeff units: cm^-1
             # source_func_jet units: erg cm^-2 s^-1 Hz^-1
             source_func_jet = power_jet / (4*math.pi*extinction_coeff(e, m, C, B, pitch_angle, p, nu))
-            # tau units: cm^-1 * cm = unitless
+            # tau units: unitless [cm^-1 * cm]
             tau = extinction_coeff(e, m, C, B, pitch_angle, p, nu) * r
 
             # intensity_jet units: erg cm^-2 s^-1 Hz^-1
             # for [Jy], multiply intensity_jet by 10**23
             intensity_jet = source_func_jet * (1 - math.exp(-tau))
-
             flux = intensity_jet * 4 * math.pi
 
             # correct for distance and emitting surface (cylinder)
             flux_earth = flux * (2*math.pi* r * cone_size_diff[slice_counter] * np.sin(incl_angle)*doppler_factor) / (4*math.pi * D_J1820**2)
+
             fluxes.append(flux_earth)
             intensities.append(intensity_jet)
 
-        # find cutoff energy of slice
+        # find cutoff energy of slice, for the electron energy
         cut_off_found = False
         for flux in fluxes:
             if flux < fluxes[0] and cut_off_found == False:
@@ -571,10 +579,9 @@ def main():
         number_photons = [fluxes[i] / (h*nu_list[i]) for i in range(len(fluxes))]
         number_photons_list.append(number_photons)
 
-        # now, call for IC scattering with synchro as input
-        # for this, i need to make a pdf (probability density function)
-        # and then a cdf (cumulative density distribution)
-        # (see explanation on Jeff's piece of paper)
+        # now, call for IC scattering with this synchrotron radiation as input
+        # for this, make a pdf (probability density function) and then a cdf
+        # (cumulative density distribution)
 
         # total number of photons for the slice, to normalize:
         number_photons_total_slice = integrate.simps(number_photons)
@@ -582,14 +589,15 @@ def main():
         pdf = np.cumsum(pdf)
 
         # we need to input a number of photons and scale this per slice
-        # the first slice has the most photons: normalize that to norm_goal_photons
-        # by dividing each slice by norm_factor_photons and multiplying by norm_goal_photons
+        # the first slice has the most photons: normalize that to 10**3 or more
+        # depending on desirable computing time, by dividing each slice by
+        # norm_fac and multiplying by that 10**3 photons
         if slice_counter == 0:
-            norm_fac = 1000 / number_photons_total_slice
+            norm_fac = 10**3 / number_photons_total_slice
         n_photons = norm_fac * number_photons_total_slice
         n_photons = int(n_photons)
 
-        # normalize to get PDF with surface of 1
+        # calculate normalisation factor for the electron PDF with surface of 1
         powerlaw_norm = quad(powerlaw, gamma_min, gamma_max, args=(p))[0]
 
         mc_parms = {'n_photons': n_photons,
@@ -600,16 +608,16 @@ def main():
                     'kt_electron':cut_off_energy,
                     'v_dist':f_of_v_powerlaw,
                     'hnu_dist':f_of_hnu_synchro,
-                    # i know the nomenclature is off, but im being consitent with the original mistake
                     'pdf': pdf,
                     'nu_list':nu_list,
                     'p': p,
                     'powerlaw_norm': powerlaw_norm,
                     'gamma_min':gamma_min,
                     'gamma_max':gamma_max,
+                    'drawn_gammas':drawn_gammas,
                     }
 
-        # do the monte carlo for each slice
+        # do the monte carlo IC scattering for each slice
         hnu_scattered, hnu_seeds=np.array(monte_carlo(mc_parms))/mc_parms['kt_seeds']
 
         # convert this histogram type thing to a number_photons vs frequency
@@ -621,6 +629,7 @@ def main():
             N_list[nu_list.index(closest_nu)] += 1
 
         # to get back to a flux, multiply by energy hnu and remove normalisation
+        # as we're plotting a nu Fnu vs nu spectrum, multiply by nu again
         for i in range(len(N_list)):
             N_list[i] = (N_list[i]/norm_fac) * h*nu_list[i]**2
 
@@ -629,10 +638,9 @@ def main():
         # we want the units to be in erg cm^-2 s^-1 for comparison
         # to spectrum in paper, so this is then nuFnu
         fluxes = [fluxes[i]*nu_list[i] for i in range(len(fluxes))]
+
         fluxes_list.append(fluxes)
-
         intensities_list.append(intensities)
-
         hnu_scattered_list.append(hnu_scattered)
 
         # keep track of which slice were at and let us know :)
@@ -648,33 +656,54 @@ def main():
     # --for the electrons, ideally you can plot the analytical distribution (power law or Maxwellian)
     # vs the distribution that you get when you sample that distribution for each scatter
 
+    counts_drawn_gammas = [0 for gam in gamma]
+    for gamma_drawn in drawn_gammas:
+        closest_gamma = gamma[min(range(len(gamma)), key = lambda i: abs(gamma[i]-gamma_drawn))]
+        counts_drawn_gammas[np.where(gamma == closest_gamma)[0][0]] += 1
+
+    # lets instead underbin or whatever u wanna call it:
+    number_bins = 1000
+    len_bin = int(len(counts_drawn_gammas) / number_bins)
+    counts_drawn_gammas_new = []
+    gamma_binned = []
+    start = 0
+    for i in range(1, number_bins + 1):
+        end = len_bin * i
+        counts_drawn_gammas_new.append(sum(counts_drawn_gammas[start:end]))
+        gamma_binned.append(0.5 * (gamma[start] + gamma[end-1]))
+        start = end
+
+    max_fac = max(counts_drawn_gammas_new)
+    counts_drawn_gammas_new = [count / max_fac for count in counts_drawn_gammas_new]
+
+    plt.scatter(gamma_binned, counts_drawn_gammas_new, label='Drawn')
+
     # plot electron powerlaw distribution
     for i in range(number):
         N[i] = powerlaw_PDF(gamma[i], mc_parms['p'], mc_parms['powerlaw_norm'])
 
-    plt.loglog(gamma,N)
+    plt.loglog(gamma,N, label='Analytical')
     plt.xlabel('$\gamma$',fontsize=20)
     plt.ylabel('N($\gamma$)',fontsize=20)
     plt.title("Electron powerlaw distribution for p={}".format(p))
     plt.show()
+
+    exit()
 
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
     hnu_scattered_list = np.array(hnu_scattered_list)
 
     # plot Fnu for each slice
-    count = 0
+    slice_num = 0
     for fluxes in fluxes_list:
-        count += 1
-        plt.plot(nu_list, fluxes, label='Slice {}'.format(count), linestyle='dashed')
+        slice_num += 1
+        plt.plot(nu_list, fluxes, label='Slice {}'.format(slice_num), linestyle='dashed')
 
     # plot total Fnu per nu
-    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black')
-
+    plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black', label='Total')
     plt.xlabel(r"$\nu\ [Hz]$")
-    # OONITS
-    # change units if i multiply flux by nu or something idk
-    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz]$")
     plt.title("Input photon spectrum (synchrotron)")
     plt.xscale("log")
     plt.yscale("log")
@@ -694,7 +723,7 @@ def main():
     # plot inverse compton scattered nuFnu spectrum
     plt.plot(nu_list, IC_fluxes, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz]$")
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
@@ -707,12 +736,12 @@ def main():
 
     # plot inverse compton scattered number of photons spectrum
     IC_nu_Fnu = np.sum(np.array(IC_nu_Fnu), 0)
-    plt.scatter(nu_list, IC_nu_Fnu, color='black')
+    plt.plot(nu_list, IC_nu_Fnu, color='black')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$Number of photons: \frac{F_{\nu}}{\nu}\ [oonits]$")
+    plt.ylabel(r"Number of photons: $\frac{F_{\nu}}{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-2}]$")
     plt.xscale("log")
     plt.yscale("log")
-    plt.title("Spectrum after IC scattering")
+    plt.title("Number of photons per frequency after IC scattering")
     plt.show()
 
     return
