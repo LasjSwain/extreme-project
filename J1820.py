@@ -29,10 +29,6 @@ import numpy as np
 import scipy.integrate as integrate
 from scipy.integrate import quad
 
-# leave out sys before handing in
-# used to exit before outputting rest of code, eg in testing
-from sys import exit
-
 # a bunch of constants needed during the course, in CGS
 c = 2.998 * 10**10
 b = 0.2898
@@ -68,8 +64,7 @@ def L_edd(M):
 
 # calculate velocity from given Gamma factor
 def gamma_to_velo(gamma):
-    beta = (-(gamma**(-2) - 1))**2
-    v = beta**(1/2) * c
+    v = (1 - (1/gamma**2))**(1/2) * c
     return v
 
 # extinction coefficient used to calculate source function (R&L 6.53)
@@ -451,7 +446,7 @@ def powerlaw_PDF(gamma, p, norm):
 # returns a single randomly drawn velocity from powerlaw_PDF
 def f_of_v_powerlaw(mc_parms):
 
-    number = 10000
+    number = 100
     N = np.zeros(number)
     gamma = np.logspace(np.log10(mc_parms['gamma_min']),np.log10(mc_parms['gamma_max']),number)
 
@@ -512,7 +507,7 @@ def main():
     pitch_angle = math.pi / 2
 
     # Abe et al 2022:
-    p = 2.4
+    p = 2.44
     gamma_min = 1
     gamma_max = 10**2
 
@@ -593,7 +588,7 @@ def main():
         # depending on desirable computing time, by dividing each slice by
         # norm_fac and multiplying by that 10**3 photons
         if slice_counter == 0:
-            norm_fac = 10**3 / number_photons_total_slice
+            norm_fac = 10**5 / number_photons_total_slice
         n_photons = norm_fac * number_photons_total_slice
         n_photons = int(n_photons)
 
@@ -603,7 +598,6 @@ def main():
         mc_parms = {'n_photons': n_photons,
                     'kt_seeds': 1.6e-9,
                     'H':r,
-                    # or maybe tau, SEE TOMORROW
                     'tau':0.1,
                     'kt_electron':cut_off_energy,
                     'v_dist':f_of_v_powerlaw,
@@ -647,22 +641,19 @@ def main():
         slice_counter += 1
         print("Slice {} made".format(slice_counter))
     
-    # show input electron distribution as a power law function
+    # show analytical electron distribution as a power law function
     number = 1000
     N = np.zeros(number)
     gamma = np.logspace(np.log10(gamma_min),np.log10(gamma_max),number)
 
-    # SERA'S MAIL: DO WE WANNA ALSO PLOT: (sampled gamma's)
-    # --for the electrons, ideally you can plot the analytical distribution (power law or Maxwellian)
-    # vs the distribution that you get when you sample that distribution for each scatter
-
+    # show drawn electron distribution as a power law function
     counts_drawn_gammas = [0 for gam in gamma]
     for gamma_drawn in drawn_gammas:
         closest_gamma = gamma[min(range(len(gamma)), key = lambda i: abs(gamma[i]-gamma_drawn))]
         counts_drawn_gammas[np.where(gamma == closest_gamma)[0][0]] += 1
 
-    # lets instead underbin or whatever u wanna call it:
-    number_bins = 1000
+    # bin the drawn electron distribution to plot nicer
+    number_bins = 50
     len_bin = int(len(counts_drawn_gammas) / number_bins)
     counts_drawn_gammas_new = []
     gamma_binned = []
@@ -676,46 +667,88 @@ def main():
     max_fac = max(counts_drawn_gammas_new)
     counts_drawn_gammas_new = [count / max_fac for count in counts_drawn_gammas_new]
 
-    plt.scatter(gamma_binned, counts_drawn_gammas_new, label='Drawn')
-
     # plot electron powerlaw distribution
     for i in range(number):
         N[i] = powerlaw_PDF(gamma[i], mc_parms['p'], mc_parms['powerlaw_norm'])
 
+    plt.scatter(gamma_binned, counts_drawn_gammas_new, label='Drawn')
     plt.loglog(gamma,N, label='Analytical')
-    plt.xlabel('$\gamma$',fontsize=20)
-    plt.ylabel('N($\gamma$)',fontsize=20)
+    plt.xlabel('$\gamma$')
+    plt.ylabel('N($\gamma$)')
     plt.title("Electron powerlaw distribution for p={}".format(p))
-    plt.show()
-
-    exit()
+    plt.savefig("plots/electron_powerlaw_distribution.png")
+    plt.close()
+    # plt.show()
 
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
     hnu_scattered_list = np.array(hnu_scattered_list)
 
-    # plot Fnu for each slice
+    # plot nuFnu for each slice, thats just flux
     slice_num = 0
     for fluxes in fluxes_list:
         slice_num += 1
         plt.plot(nu_list, fluxes, label='Slice {}'.format(slice_num), linestyle='dashed')
 
-    # plot total Fnu per nu
+    # plot total nuFnu per nu
     plt.plot(nu_list, np.sum(np.array(fluxes_list), 0), color='black', label='Total')
     plt.xlabel(r"$\nu\ [Hz]$")
-    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz]$")
+    plt.ylabel(r"$\nu\ F_{\nu}\ [erg\ cm^{-2}\ s^{-1}]$")
     plt.title("Input photon spectrum (synchrotron)")
     plt.xscale("log")
     plt.yscale("log")
     plt.legend()
-    plt.show()
+    plt.savefig("plots/input_synchrotron_nuFnu")
+    plt.close()
+    # plt.show()
 
-    # plot number of photons for each slice
-    # for number_photons in number_photons_list:
-    #     plt.plot(nu_list, number_photons, label='r={:e}'.format(r), linestyle='dashed')
+    # fluxes divnu is actually the flux; before it was nuFnu
+    fluxes_divnu_list = []
+    for fluxes in fluxes_list:
+        fluxes_divnu = [fluxes[i]/nu_list[i] for i in range(len(fluxes))]
+        fluxes_divnu_list.append(fluxes_divnu)
 
-    # for IC_flux in IC_fluxes:
-    #     plt.scatter(nu_list, IC_flux)
+    # plot Fnu for each slice
+    slice_num = 0
+    for fluxes_divnu in fluxes_divnu_list:
+        slice_num += 1
+        plt.plot(nu_list, fluxes_divnu, label='Slice {}'.format(slice_num), linestyle='dashed')
+
+    # plot total Fnu per nu
+    plt.plot(nu_list, np.sum(np.array(fluxes_divnu_list), 0), color='black', label='Total')
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"$F_{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-1}]$")
+    plt.title("Input photon spectrum (synchrotron)")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.savefig("plots/input_synchrotron_Fnu")
+    plt.close()
+    # plt.show()
+
+    # fluxes divnunu is actually the flux over nu; before it was nuFnu
+    fluxes_divnunu_list = []
+    for fluxes in fluxes_list:
+        fluxes_divnunu = [fluxes[i]/(h*nu_list[i]**2) for i in range(len(fluxes))]
+        fluxes_divnunu_list.append(fluxes_divnunu)
+
+    # plot Fnu/nu for each slice
+    slice_num = 0
+    for fluxes_divnunu in fluxes_divnunu_list:
+        slice_num += 1
+        plt.plot(nu_list, fluxes_divnunu, label='Slice {}'.format(slice_num), linestyle='dashed')
+
+    # plot total Fnu/nu per nu
+    plt.plot(nu_list, np.sum(np.array(fluxes_divnunu_list), 0), color='black', label='Total')
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"$\frac{F_{\nu}}{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-2}]$")
+    plt.title("Input photon spectrum (synchrotron)")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.savefig("plots/input_synchrotron_Fnu_over_nu")
+    plt.close()
+    # plt.show()
     
     IC_nu_Fnu = IC_fluxes
     IC_fluxes = np.sum(np.array(IC_fluxes), 0)
@@ -727,7 +760,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
-    plt.show()
+    plt.savefig("plots/comptoned_spectrum")
+    plt.close()
+    # plt.show()
 
     # divide by h*nu**2 to get to a number of photons, to see whats happening
     for IC_nufnu in IC_nu_Fnu:
@@ -742,7 +777,29 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Number of photons per frequency after IC scattering")
-    plt.show()
+    plt.savefig("plots/comptoned_number_photons")
+    plt.close()
+    # plt.show()
+
+    # plot inverse compton scattered number of photons spectrum,
+    # now including input synchrotron
+
+    # plot Fnu/nu for each slice
+    for fluxes_divnunu in fluxes_divnunu_list:
+        plt.plot(nu_list, fluxes_divnunu, linestyle='dashed')
+
+    # plot total Fnu/nu per nu
+    plt.plot(nu_list, np.sum(np.array(fluxes_divnunu_list), 0), color='black', label='Input synchrotron')
+    plt.scatter(nu_list, IC_nu_Fnu, color='black', s=0.5, label='IC scattered')
+    plt.xlabel(r"$\nu\ [Hz]$")
+    plt.ylabel(r"Number of photons: $\frac{F_{\nu}}{\nu}\ [erg\ cm^{-2}\ s^{-1}\ Hz^{-2}]$")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.title("Number of photons per frequency before/after IC scattering")
+    plt.legend()
+    plt.savefig("plots/synchrotron_and_comptoned_number_photons")
+    plt.close()
+    # plt.show()
 
     return
 
