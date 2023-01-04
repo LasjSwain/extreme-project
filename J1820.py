@@ -676,9 +676,9 @@ def main():
     plt.xlabel('$\gamma$')
     plt.ylabel('N($\gamma$)')
     plt.title("Electron powerlaw distribution for p={}".format(p))
-    plt.savefig("plots/electron_powerlaw_distribution.png")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/electron_powerlaw_distribution.png")
+    # plt.close()
+    plt.show()
 
     # unpack list of lists into single list
     hnu_scattered_list = [hnu for hnu_scattered in hnu_scattered_list for hnu in hnu_scattered]
@@ -698,9 +698,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.legend()
-    plt.savefig("plots/input_synchrotron_nuFnu")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/input_synchrotron_nuFnu")
+    # plt.close()
+    plt.show()
 
     # fluxes divnu is actually the flux; before it was nuFnu
     fluxes_divnu_list = []
@@ -722,9 +722,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.legend()
-    plt.savefig("plots/input_synchrotron_Fnu")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/input_synchrotron_Fnu")
+    # plt.close()
+    plt.show()
 
     # fluxes divnunu is actually the flux over nu; before it was nuFnu
     fluxes_divnunu_list = []
@@ -746,9 +746,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.legend()
-    plt.savefig("plots/input_synchrotron_Fnu_over_nu")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/input_synchrotron_Fnu_over_nu")
+    # plt.close()
+    plt.show()
     
     IC_nu_Fnu = IC_fluxes
     IC_fluxes = np.sum(np.array(IC_fluxes), 0)
@@ -760,9 +760,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Spectrum after IC scattering")
-    plt.savefig("plots/comptoned_spectrum")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/comptoned_spectrum")
+    # plt.close()
+    plt.show()
 
     # divide by h*nu**2 to get to a number of photons, to see whats happening
     for IC_nufnu in IC_nu_Fnu:
@@ -777,9 +777,9 @@ def main():
     plt.xscale("log")
     plt.yscale("log")
     plt.title("Number of photons per frequency after IC scattering")
-    plt.savefig("plots/comptoned_number_photons")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/comptoned_number_photons")
+    # plt.close()
+    plt.show()
 
     # plot inverse compton scattered number of photons spectrum,
     # now including input synchrotron
@@ -797,9 +797,9 @@ def main():
     plt.yscale("log")
     plt.title("Number of photons per frequency before/after IC scattering")
     plt.legend()
-    plt.savefig("plots/synchrotron_and_comptoned_number_photons")
-    plt.close()
-    # plt.show()
+    # plt.savefig("plots/synchrotron_and_comptoned_number_photons")
+    # plt.close()
+    plt.show()
 
     return
 
